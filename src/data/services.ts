@@ -477,7 +477,7 @@ export const services: Service[] = [
         priceModifier: 4000
       }
     ]
-  }
+  },
   {
     id: 'dj-002',
     name: 'Mix Master Events',
