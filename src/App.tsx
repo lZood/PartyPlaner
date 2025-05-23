@@ -12,6 +12,8 @@ import ServiceListPage from './pages/ServiceListPage';
 import ServiceDetailPage from './pages/ServiceDetailPage';
 import CartPage from './pages/CartPage';
 import AboutPage from './pages/AboutPage';
+import PaymentPage from './pages/PaymentPage';
+import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import SearchResultsPage from './pages/SearchResultsPage';
 import ContactPage from './pages/ContactPage';
 import FaqPage from './pages/FaqPage';
@@ -38,6 +40,8 @@ function App() {
             <Route path="service/:serviceId" element={<ServiceDetailPage />} />
             <Route path="search" element={<SearchResultsPage />} />
             <Route path="cart" element={<CartPage />} />
+            <Route path="payment" element={<PaymentPage />} />
+            <Route path="payment/success" element={<PaymentSuccessPage />} />
             <Route path="about" element={<AboutPage />} />
             <Route path="contact" element={<ContactPage />} />
             <Route path="faq" element={<FaqPage />} />

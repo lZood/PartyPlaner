@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Trash2, MinusCircle, PlusCircle, CreditCard } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
-import { useAuth } from '../contexts/AuthContext';
 import { categories } from '../data/categories';
+import { useNavigate } from 'react-router-dom';
 
 const CartPage: React.FC = () => {
   const { cart, removeFromCart, updateQuantity, clearCart } = useCart();
-  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   // Calculate total
   const calculateTotal = () => {
@@ -31,15 +31,8 @@ const CartPage: React.FC = () => {
   const calculateGrandTotal = () => {
     return calculateSubtotal() + calculateIVA();
   };
-
-  const handleProceedToPayment = () => {
-    if (!isAuthenticated) {
-      // Handle authentication
-      return;
-    }
-    // Navigate to payment page
-    navigate('/payment');
-  };
+  
+  const handleProceedToPayment = () => navigate('/payment');
 
   useEffect(() => {
     document.title = 'Carrito de Compra | CABETG Party Planner';
