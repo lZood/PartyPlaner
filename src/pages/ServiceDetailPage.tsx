@@ -274,7 +274,7 @@ const ServiceDetailPage: React.FC = () => {
                     to="/cart"
                     className="btn w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 rounded-lg font-medium"
                   >
-                    Ver en Mi Lista de Cotización
+                    Ver mi carrito
                   </Link>
                   <button
                     onClick={handleAddToCart}
