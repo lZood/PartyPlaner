@@ -1,66 +1,44 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Trash2, MinusCircle, PlusCircle, CheckCircle, CreditCard } from 'lucide-react';
+import { Trash2, MinusCircle, PlusCircle, CreditCard } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { categories } from '../data/categories';
-import AuthModal from '../components/auth/AuthModal';
 
 const CartPage: React.FC = () => {
   const { cart, removeFromCart, updateQuantity, clearCart } = useCart();
   const { isAuthenticated } = useAuth();
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    eventDate: '',
-    eventLocation: '',
-    comments: '',
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
 
   // Calculate total
   const calculateTotal = () => {
     return cart.items.reduce((total, item) => {
       if (item.service.price) {
-        return total + item.service.price * item.quantity;
+        const itemTotal = item.service.price * item.quantity;
+        return total + itemTotal;
       }
       return total;
     }, 0);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+  const calculateSubtotal = () => {
+    return calculateTotal();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const calculateIVA = () => {
+    return calculateSubtotal() * 0.16;
+  };
 
+  const calculateGrandTotal = () => {
+    return calculateSubtotal() + calculateIVA();
+  };
+
+  const handleProceedToPayment = () => {
     if (!isAuthenticated) {
-      setShowAuthModal(true);
-      setIsSubmitting(false);
+      // Handle authentication
       return;
     }
-
-    // Proceed with payment simulation
-    simulatePayment();
-  };
-
-  const simulatePayment = () => {
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setIsSubmitted(true);
-      clearCart();
-    }, 2000);
-  };
-
-  const handleAuthSuccess = () => {
-    setShowAuthModal(false);
-    simulatePayment();
+    // Navigate to payment page
+    navigate('/payment');
   };
 
   useEffect(() => {
@@ -70,30 +48,9 @@ const CartPage: React.FC = () => {
   return (
     <div className="bg-gray-50 py-12">
       <div className="container-custom">
-        <h1 className="text-3xl font-bold mb-8">Carrito de Compra</h1>
-        <AuthModal
-          isOpen={showAuthModal}
-          onClose={() => setShowAuthModal(false)}
-          onSuccess={handleAuthSuccess}
-        />
+        <h1 className="text-3xl font-bold mb-8">Mi Carrito</h1>
 
-        {isSubmitted ? (
-          <div className="bg-white rounded-xl shadow-md p-8 text-center">
-            <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle className="text-primary-500" size={32} />
-            </div>
-            <h2 className="text-2xl font-bold mb-4">¡Solicitud Enviada con Éxito!</h2>
-            <p className="text-gray-600 mb-6 max-w-md mx-auto">
-              Hemos recibido tu solicitud de cotización. Uno de nuestros asesores se pondrá en contacto contigo en las próximas 24 horas.
-            </p>
-            <Link
-              to="/"
-              className="btn bg-primary-500 hover:bg-primary-600 text-white py-3 px-8 rounded-lg font-medium"
-            >
-              Volver al Inicio
-            </Link>
-          </div>
-        ) : cart.items.length === 0 ? (
+        {cart.items.length === 0 ? (
           <div className="bg-white rounded-xl shadow-md p-8 text-center">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <svg
@@ -123,9 +80,9 @@ const CartPage: React.FC = () => {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             {/* Cart Items */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-8">
               <div className="bg-white rounded-xl shadow-md p-6 mb-8">
                 <h2 className="text-xl font-bold mb-4">Servicios Seleccionados</h2>
                 
@@ -221,7 +178,7 @@ const CartPage: React.FC = () => {
                   })}
                 </div>
                 
-                <div className="flex justify-between pt-6 border-t border-gray-200 mt-6">
+                <div className="flex justify-between items-center pt-6 border-t border-gray-200 mt-6">
                   <button
                     onClick={clearCart}
                     className="text-gray-500 hover:text-error-500 flex items-center"
@@ -229,156 +186,37 @@ const CartPage: React.FC = () => {
                     <Trash2 size={16} className="mr-1" />
                     <span>Vaciar lista</span>
                   </button>
-                  
-                  <div className="text-right">
-                    <div className="text-sm text-gray-600 mb-1">
-                      Total estimado (servicios con precio fijo)
-                    </div>
-                    <div className="text-xl font-bold">
-                      ${calculateTotal().toLocaleString('es-MX')}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      *Algunos servicios requieren cotización personalizada
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Request Form */}
-            <div className="lg:col-span-1">
+            {/* Purchase Summary */}
+            <div className="lg:col-span-4">
               <div className="bg-white rounded-xl shadow-md p-6">
-                <h2 className="text-xl font-bold mb-4">Solicitar Cotización</h2>
-                
-                <form onSubmit={handleSubmit}>
-                  <div className="space-y-4">
-                    <div>
-                      <label 
-                        htmlFor="name" 
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Nombre completo *
-                      </label>
-                      <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        required
-                        value={formData.name}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label 
-                        htmlFor="email" 
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Correo electrónico *
-                      </label>
-                      <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        required
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label 
-                        htmlFor="phone" 
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Teléfono *
-                      </label>
-                      <input
-                        type="tel"
-                        id="phone"
-                        name="phone"
-                        required
-                        value={formData.phone}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label 
-                        htmlFor="eventDate" 
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Fecha del evento *
-                      </label>
-                      <input
-                        type="date"
-                        id="eventDate"
-                        name="eventDate"
-                        required
-                        value={formData.eventDate}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label 
-                        htmlFor="eventLocation" 
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Ubicación del evento *
-                      </label>
-                      <input
-                        type="text"
-                        id="eventLocation"
-                        name="eventLocation"
-                        required
-                        value={formData.eventLocation}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label 
-                        htmlFor="comments" 
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Comentarios o solicitudes especiales
-                      </label>
-                      <textarea
-                        id="comments"
-                        name="comments"
-                        rows={3}
-                        value={formData.comments}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
-                      ></textarea>
+                <h2 className="text-xl font-bold mb-6">Resumen de Compra</h2>
+                <div className="space-y-4">
+                  <div className="flex justify-between py-2">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="font-medium">${calculateSubtotal().toLocaleString('es-MX')}</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-gray-600">IVA (16%)</span>
+                    <span className="font-medium">${calculateIVA().toLocaleString('es-MX')}</span>
+                  </div>
+                  <div className="border-t border-gray-200 pt-4 mt-4">
+                    <div className="flex justify-between">
+                      <span className="text-lg font-bold">Total</span>
+                      <span className="text-lg font-bold">${calculateGrandTotal().toLocaleString('es-MX')}</span>
                     </div>
                   </div>
-                  
-                  <div className="mt-6">
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className={`w-full bg-primary-500 flex items-center justify-center ${
-                        isSubmitting ? 'opacity-70' : 'hover:bg-primary-600'
-                      } text-white py-3 rounded-lg font-medium transition-colors`}
-                    >
-                      {isSubmitting ? (
-                        'Procesando...'
-                      ) : (
-                        <>
-                          <CreditCard size={20} className="mr-2" />
-                          Contratar Ahora
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
+                  <button
+                    onClick={handleProceedToPayment}
+                    className="w-full bg-primary-500 hover:bg-primary-600 text-white py-3 rounded-lg font-medium mt-6 flex items-center justify-center"
+                  >
+                    <CreditCard size={20} className="mr-2" />
+                    Proceder al Pago
+                  </button>
+                </div>
               </div>
             </div>
           </div>
