@@ -40,7 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const updateUserState = async (userId: string, email: string, userName?: string) => {
+  const updateUserState = async (userId: string, email: string) => {
     try {
       const { data: profile, error } = await supabase
         .from('users')
@@ -48,13 +48,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
+      if (error && error.code === 'PGRST116') {
+        // User profile doesn't exist yet, create it
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert([
+            {
+              id: userId,
+              email: email,
+              name: email.split('@')[0]
+            }
+          ]);
 
-      setUser({
-        id: userId,
-        email: email,
-        name: profile?.name || userName || email.split('@')[0]
-      });
+        if (insertError) throw insertError;
+
+        setUser({
+          id: userId,
+          email: email,
+          name: email.split('@')[0]
+        });
+      } else if (error) {
+        throw error;
+      } else {
+        setUser({
+          id: userId,
+          email: email,
+          name: profile.name
+        });
+      }
+
       setIsAuthenticated(true);
     } catch (err) {
       console.error('Error updating user state:', err);
@@ -141,9 +163,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (email: string, password: string, name: string) => {
     logAuthAction('Register attempt', { email });
     
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const { data: { user: authUser }, error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          name: name
+        }
+      }
     });
 
     if (authError) {
@@ -151,16 +178,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw authError;
     }
 
-    if (authData.user) {
-      logAuthAction('Registration successful', { userId: authData.user.id });
+    if (authUser) {
+      logAuthAction('Registration successful', { userId: authUser.id });
       
       // Create user profile in users table
       const { error: profileError } = await supabase
         .from('users')
         .insert([
           {
-            id: authData.user.id,
-            email: authData.user.email,
+            id: authUser.id,
+            email: authUser.email,
             name: name,
           }
         ]);
@@ -172,7 +199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       logAuthAction('Profile created', { userId: authData.user.id });
 
-      await updateUserState(authData.user.id, authData.user.email!, name);
+      await updateUserState(authUser.id, authUser.email!);
       logAuthSuccess('Registration completed', authData.user.id);
     }
   };

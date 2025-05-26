@@ -2,13 +2,7 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCart } from '../../contexts/CartContext';
-import { createClient } from '@supabase/supabase-js';
 import { Service } from '../../types';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -33,27 +27,21 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, pendi
     e.preventDefault();
     setError('');
     setIsLoading(true);
-    console.log('Starting auth process...');
 
     try {
       if (isLogin) {
-        console.log('Attempting login...');
         await login(email, password);
       } else {
-        console.log('Attempting registration...');
         await register(email, password, name);
       }
       
-      console.log('Auth successful, checking for pending service...');
       // Add pending service to cart if exists
       if (pendingService && pendingQuantity) {
-        console.log('Adding pending service to cart...');
         addToCart(pendingService, pendingQuantity);
       }
       
-      console.log('Auth process complete, closing modal...');
-      onSuccess();
       setIsLoading(false);
+      onSuccess();
       onClose();
     } catch (err) {
       console.error('Auth error:', err);
