@@ -62,49 +62,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (error) {
-      throw error;
+    if (authError) {
+      throw authError;
     }
 
-    if (data.user) {
+    if (authData.user) {
       const { data: profile } = await supabase
         .from('users')
         .select('*')
-        .eq('id', data.user.id)
+        .eq('id', authData.user.id)
         .single();
 
       setUser({
-        id: data.user.id,
-        email: data.user.email!,
-        name: profile?.name || data.user.email!.split('@')[0]
+        id: authData.user.id,
+        email: authData.user.email!,
+        name: profile?.name || authData.user.email!.split('@')[0]
       });
       setIsAuthenticated(true);
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
-    const { data, error } = await supabase.auth.signUp({
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
     });
 
-    if (error) {
-      throw error;
+    if (authError) {
+      throw authError;
     }
 
-    if (data.user) {
+    if (authData.user) {
       // Create user profile
       const { error: profileError } = await supabase
         .from('users')
         .insert([
           {
-            id: data.user.id,
-            email: data.user.email,
+            id: authData.user.id,
+            email: authData.user.email,
             name: name,
           }
         ]);
@@ -114,8 +114,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setUser({
-        id: data.user.id,
-        email: data.user.email!,
+        id: authData.user.id,
+        email: authData.user.email!,
         name: name
       });
       setIsAuthenticated(true);
