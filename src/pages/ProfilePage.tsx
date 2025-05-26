@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import { User, Mail, Phone, Plus, Package, Star, Edit, Trash2, X, Upload, Image as ImageIcon } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { categories } from '../data/categories';
 import { Service } from '../types';
 import { createClient } from '@supabase/supabase-js';
@@ -37,8 +37,6 @@ const ProfilePage: React.FC = () => {
     shortDescription: '',
     description: '',
     price: '',
-    mainImage: null as File | null,
-    gallery: [] as File[],
     features: [''],
   });
   const [myServices, setMyServices] = useState<Service[]>([]);
@@ -91,9 +89,25 @@ const ProfilePage: React.FC = () => {
     }
     document.title = 'Mi Perfil | CABETG Party Planner';
     
-    // TODO: Fetch user's services from Supabase
-    // This is where you would load the services provided by this user
-  }, [isAuthenticated, navigate]);
+    // Fetch user's services
+    const fetchServices = async () => {
+      const { data: services, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('provider_id', user?.id);
+
+      if (error) {
+        console.error('Error fetching services:', error);
+        return;
+      }
+
+      setMyServices(services);
+    };
+
+    if (user?.id) {
+      fetchServices();
+    }
+  }, [isAuthenticated, navigate, user?.id]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +119,7 @@ const ProfilePage: React.FC = () => {
     e.preventDefault();
     try {
       if (!mainImage) {
-        alert('Please select a main image');
+        alert('Por favor selecciona una imagen principal');
         return;
       }
 
@@ -168,10 +182,17 @@ const ProfilePage: React.FC = () => {
 
       setShowServiceForm(false);
       // Refresh services list
-      // TODO: Add function to fetch services
+      const { data: updatedServices } = await supabase
+        .from('services')
+        .select('*')
+        .eq('provider_id', user?.id);
+
+      if (updatedServices) {
+        setMyServices(updatedServices);
+      }
     } catch (error) {
       console.error('Error creating service:', error);
-      alert('Error creating service. Please try again.');
+      alert('Error al crear el servicio. Por favor intenta de nuevo.');
     }
   };
 
@@ -179,13 +200,6 @@ const ProfilePage: React.FC = () => {
     setServiceFormData(prev => ({
       ...prev,
       features: [...prev.features, '']
-    }));
-  };
-
-  const handleAddGalleryImage = () => {
-    setServiceFormData(prev => ({
-      ...prev,
-      gallery: [...prev.gallery, '']
     }));
   };
 
