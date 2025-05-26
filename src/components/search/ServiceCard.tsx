@@ -2,7 +2,9 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Star, Heart } from 'lucide-react';
 import { Service } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
 import { useCart } from '../../contexts/CartContext';
+import AuthModal from '../auth/AuthModal';
 import { categories } from '../../data/categories';
 
 interface ServiceCardProps {
@@ -10,12 +12,34 @@ interface ServiceCardProps {
 }
 
 const ServiceCard: React.FC<ServiceCardProps> = ({ service }) => {
+  const { isAuthenticated } = useAuth();
   const { addToCart, isInCart } = useCart();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  const handleAddToCart = () => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+    addToCart(service);
+  };
   const category = categories.find(cat => cat.id === service.categoryId);
   const subcategory = category?.subcategories.find(sub => sub.id === service.subcategoryId);
 
   return (
     <div className="card group">
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => {
+          setShowAuthModal(false);
+          addToCart(service);
+        }}
+        pendingService={service}
+        pendingQuantity={1}
+      />
+
       <div className="relative overflow-hidden">
         <Link to={`/service/${service.id}`}>
           <img 
@@ -82,7 +106,7 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ service }) => {
             </Link>
           ) : (
             <button 
-              onClick={() => addToCart(service)}
+              onClick={handleAddToCart}
               className="btn bg-primary-500 hover:bg-primary-600 text-white py-1 px-3 rounded text-sm"
             >
               Añadir
