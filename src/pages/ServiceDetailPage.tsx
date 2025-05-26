@@ -6,11 +6,13 @@ import { services } from '../data/services';
 import { categories } from '../data/categories';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
+import AuthModal from '../components/auth/AuthModal';
 
 const ServiceDetailPage: React.FC = () => {
   const { serviceId } = useParams<{ serviceId: string }>();
   const { addToCart, isInCart } = useCart();
   const { isAuthenticated } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   
@@ -78,7 +80,7 @@ const ServiceDetailPage: React.FC = () => {
 
   const handleAddToCart = () => {
     if (!isAuthenticated) {
-      alert('Por favor inicia sesión para agregar servicios al carrito');
+      setShowAuthModal(true);
       return;
     }
     if (service) {
@@ -100,6 +102,20 @@ const ServiceDetailPage: React.FC = () => {
 
   return (
     <div className="bg-gray-50 py-12">
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => {
+          setShowAuthModal(false);
+          if (service) {
+            addToCart(service, quantity);
+          }
+        }}
+        pendingService={service}
+        pendingQuantity={quantity}
+      />
+
       <div className="container-custom">
         {/* Breadcrumb */}
         <nav className="mb-8 text-sm">

@@ -4,12 +4,14 @@ import { Trash2, MinusCircle, PlusCircle, CreditCard } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { categories } from '../data/categories';
+import AuthModal from '../components/auth/AuthModal';
 import { useNavigate } from 'react-router-dom';
 
 const CartPage: React.FC = () => {
   const { cart, removeFromCart, updateQuantity, clearCart } = useCart();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Calculate total
@@ -37,7 +39,7 @@ const CartPage: React.FC = () => {
   
   const handleProceedToPayment = () => {
     if (!isAuthenticated) {
-      alert('Por favor inicia sesión para continuar con la compra');
+      setShowAuthModal(true);
       return;
     }
     navigate('/payment');
@@ -50,6 +52,16 @@ const CartPage: React.FC = () => {
   return (
     <div className="bg-gray-50 py-12">
       <div className="container-custom">
+        {/* Auth Modal */}
+        <AuthModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={() => {
+            setShowAuthModal(false);
+            navigate('/payment');
+          }}
+        />
+
         <h1 className="text-3xl font-bold mb-8">Mi Carrito</h1>
 
         {cart.items.length === 0 ? (

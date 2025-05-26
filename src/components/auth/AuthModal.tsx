@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCart } from '../../contexts/CartContext';
+import { Service } from '../../types';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  pendingService?: Service;
+  pendingQuantity?: number;
 }
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, pendingService, pendingQuantity }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,6 +21,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
   const [isLoading, setIsLoading] = useState(false);
 
   const { login, register } = useAuth();
+  const { addToCart } = useCart();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +34,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
       } else {
         await register(email, password, name);
       }
+      
+      // Add pending service to cart if exists
+      if (pendingService && pendingQuantity) {
+        addToCart(pendingService, pendingQuantity);
+      }
+      
       onSuccess();
     } catch (err) {
       setError('Ha ocurrido un error. Por favor intenta de nuevo.');
