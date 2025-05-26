@@ -67,6 +67,7 @@ const ServiceDetailPage: React.FC = () => {
   useEffect(() => {
     if (service) {
       document.title = `${service.name} | CABETG Party Planner`;
+      window.scrollTo(0, 0);
     }
   }, [service]);
 
