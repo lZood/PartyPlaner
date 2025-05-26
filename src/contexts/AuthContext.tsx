@@ -40,6 +40,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  const updateUserState = async (userId: string, email: string, userName?: string) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+
+      setUser({
+        id: userId,
+        email: email,
+        name: profile?.name || userName || email.split('@')[0]
+      });
+      setIsAuthenticated(true);
+    } catch (err) {
+      console.error('Error updating user state:', err);
+      throw err;
+    }
+  };
+
   const logAuthError = (error: AuthError, action: string) => {
     console.error(`Auth Error during ${action}:`, {
       message: error.message,
@@ -65,29 +87,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Check active session
     logAuthAction('Checking session');
+    
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await updateUserState(session.user.id, session.user.email!);
+      }
+    };
+
+    checkSession();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       logAuthAction('Auth state changed', { event });
       
       if (session) {
         logAuthAction('Session found', { userId: session.user.id });
-        
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        logAuthAction('Profile fetch result', { 
-          success: !!profile,
-          hasProfile: !!profile
-        });
-
-        setUser({
-          id: session.user.id,
-          email: session.user.email!,
-          name: profile?.name || session.user.email!.split('@')[0]
-        });
-        setIsAuthenticated(true);
+        await updateUserState(session.user.id, session.user.email!);
         logAuthSuccess('Session restored', session.user.id);
       } else {
         logAuthAction('No session found');
@@ -97,6 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => {
+      logAuthAction('Cleaning up auth subscriptions');
       subscription.unsubscribe();
     };
   }, []);
@@ -117,23 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (authData.user) {
       logAuthAction('Login successful', { userId: authData.user.id });
       
-      const { data: profile } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authData.user.id)
-        .single();
-
-      logAuthAction('Profile fetch result', {
-        success: !!profile,
-        hasProfile: !!profile
-      });
-
-      setUser({
-        id: authData.user.id,
-        email: authData.user.email!,
-        name: profile?.name || authData.user.email!.split('@')[0]
-      });
-      setIsAuthenticated(true);
+      await updateUserState(authData.user.id, authData.user.email!);
       logAuthSuccess('Login completed', authData.user.id);
     }
   };
@@ -154,7 +154,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (authData.user) {
       logAuthAction('Registration successful', { userId: authData.user.id });
       
-      // Create user profile
+      // Create user profile in users table
       const { error: profileError } = await supabase
         .from('users')
         .insert([
@@ -172,12 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       logAuthAction('Profile created', { userId: authData.user.id });
 
-      setUser({
-        id: authData.user.id,
-        email: authData.user.email!,
-        name: name
-      });
-      setIsAuthenticated(true);
+      await updateUserState(authData.user.id, authData.user.email!, name);
       logAuthSuccess('Registration completed', authData.user.id);
     }
   };
