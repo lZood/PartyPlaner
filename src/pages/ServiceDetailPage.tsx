@@ -4,11 +4,13 @@ import Slider from 'react-slick';
 import { Star, Heart, CheckCircle, Truck, Calendar, Clock, MinusCircle, PlusCircle } from 'lucide-react';
 import { services } from '../data/services';
 import { categories } from '../data/categories';
+import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 
 const ServiceDetailPage: React.FC = () => {
   const { serviceId } = useParams<{ serviceId: string }>();
   const { addToCart, isInCart } = useCart();
+  const { isAuthenticated } = useAuth();
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   
@@ -75,6 +77,10 @@ const ServiceDetailPage: React.FC = () => {
   };
 
   const handleAddToCart = () => {
+    if (!isAuthenticated) {
+      alert('Por favor inicia sesión para agregar servicios al carrito');
+      return;
+    }
     if (service) {
       addToCart(service, quantity);
     }
