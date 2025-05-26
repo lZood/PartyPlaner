@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { CreditCard, Calendar, Lock } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const PaymentPage: React.FC = () => {
   const navigate = useNavigate();
   const { cart, clearCart } = useCart();
+  const { isAuthenticated } = useAuth();
   const [formData, setFormData] = useState({
     cardNumber: '',
     cardName: '',
@@ -13,6 +15,10 @@ const PaymentPage: React.FC = () => {
     cvv: '',
   });
   const [isProcessing, setIsProcessing] = useState(false);
+
+  if (!isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
 
   const calculateSubtotal = () => {
     return cart.items.reduce((total, item) => {
