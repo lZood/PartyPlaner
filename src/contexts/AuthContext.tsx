@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { toast } from 'react-toastify';
 
 interface User {
   id: string;
@@ -33,9 +34,30 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check active session
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        setUser({
+          id: session.user.id,
+          email: session.user.email!,
+          name: profile?.name || session.user.email!.split('@')[0]
+        });
+        setIsAuthenticated(true);
+      }
+      setIsLoading(false);
+    };
+
+    checkSession();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
         const { data: profile } = await supabase
@@ -66,8 +88,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email,
       password,
     });
-
     if (authError) {
+      if (authError.message.includes('Invalid login credentials')) {
+        throw new Error('Correo o contraseña incorrectos');
+      }
       throw authError;
     }
 
@@ -84,6 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: profile?.name || authData.user.email!.split('@')[0]
       });
       setIsAuthenticated(true);
+      toast.success(`¡Bienvenido de nuevo!`);
     }
   };
 
@@ -92,8 +117,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email,
       password,
     });
-
     if (authError) {
+      if (authError.message.includes('already registered')) {
+        throw new Error('Este correo ya está registrado');
+      }
       throw authError;
     }
 
@@ -119,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: name
       });
       setIsAuthenticated(true);
+      toast.success(`¡Bienvenido ${name}!`);
     }
   };
 

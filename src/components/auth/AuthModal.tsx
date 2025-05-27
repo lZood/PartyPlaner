@@ -27,7 +27,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, pendi
     e.preventDefault();
     setError('');
     setIsLoading(true);
-
     try {
       if (isLogin) {
         await login(email, password);
@@ -42,7 +41,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, pendi
       
       onSuccess();
     } catch (err) {
-      setError('Ha ocurrido un error. Por favor intenta de nuevo.');
+      setError((err as Error).message || 'Ha ocurrido un error. Por favor intenta de nuevo.');
     }
 
     setIsLoading(false);
