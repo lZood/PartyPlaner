@@ -730,42 +730,60 @@ const ProfilePage: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {myServices.map(service => { //
-                  const displayImageUrl = service.imageUrl || 'https://via.placeholder.com/300x200?text=Sin+Imagen'; //
-                  return (
-                    <div key={service.id} className="bg-white rounded-xl shadow-md overflow-hidden">
-                        <img
-                        src={displayImageUrl} //
-                        alt={service.name}
-                        className="w-full h-48 object-cover"
-                        onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/300x200?text=Error+Img')} //
-                        />
-                        <div className="p-6">
-                        <h3 className="text-xl font-semibold mb-2">{service.name}</h3>
-                        <p className="text-gray-600 text-sm mb-4 line-clamp-2">{service.shortDescription}</p>
-                        <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center">
-                            <Star className="text-warning-500 fill-current" size={18} />
-                            <span className="ml-1 font-medium">{service.rating || 0}</span>
-                            <span className="mx-1 text-gray-400">·</span>
-                            <span className="text-gray-600">({service.reviewCount || 0} reseñas)</span>
-                            </div>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ (service as any).is_approved ? 'bg-success-100 text-success-700' : 'bg-warning-100 text-warning-700'}`}>
-                                {(service as any).is_approved ? 'Aprobado' : 'Pendiente'}
-                            </span>
-                        </div>
-                        <div className="mt-4 flex space-x-2">
-                            <button className="p-2 text-gray-500 hover:text-primary-500 bg-gray-100 hover:bg-gray-200 rounded-md" aria-label="Editar servicio">
-                                <Edit size={18} />
-                            </button>
-                            <button className="p-2 text-gray-500 hover:text-error-500 bg-gray-100 hover:bg-gray-200 rounded-md" aria-label="Eliminar servicio">
-                                <Trash2 size={18} />
-                            </button>
-                        </div>
-                        </div>
-                    </div>
-                  );
-                })}
+                {myServices.map(service => {
+  const displayImageUrl = service.imageUrl || 'https://placehold.co/300x200?text=Sin+Imagen';
+  return (
+    <Link key={service.id} to={`/service/${service.id}`} className="block group"> {/* Añade el Link aquí */}
+      <div className="bg-white rounded-xl shadow-md overflow-hidden h-full flex flex-col group-hover:shadow-lg transition-shadow duration-300"> {/* Añade clases para hover effect si deseas */}
+        <img
+          src={displayImageUrl}
+          alt={service.name}
+          className="w-full h-48 object-cover"
+          onError={(e) => (e.currentTarget.src = 'https://placehold.co/300x200?text=Error+Img')}
+        />
+        <div className="p-6 flex flex-col flex-grow"> {/* flex-grow para que el contenido ocupe espacio */}
+          <h3 className="text-xl font-semibold mb-2 group-hover:text-primary-500 transition-colors">{service.name}</h3>
+          <p className="text-gray-600 text-sm mb-4 line-clamp-2 flex-grow">{service.shortDescription}</p> {/* flex-grow para la descripción */}
+          <div className="flex items-center justify-between text-sm mt-auto"> {/* mt-auto para empujar al fondo */}
+            <div className="flex items-center">
+              <Star className="text-warning-500 fill-current" size={18} />
+              <span className="ml-1 font-medium">{service.rating || 0}</span>
+              <span className="mx-1 text-gray-400">·</span>
+              <span className="text-gray-600">({service.reviewCount || 0} reseñas)</span>
+            </div>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ (service as any).is_approved ? 'bg-success-100 text-success-700' : 'bg-warning-100 text-warning-700'}`}>
+              {(service as any).is_approved ? 'Aprobado' : 'Pendiente'}
+            </span>
+          </div>
+          <div className="mt-4 flex space-x-2">
+            <button 
+              onClick={(e) => {
+                e.preventDefault(); // Prevenir la navegación del Link padre
+                // Lógica para editar el servicio aquí (ej. abrir un modal)
+                console.log('Editar servicio:', service.id);
+              }}
+              className="p-2 text-gray-500 hover:text-primary-500 bg-gray-100 hover:bg-gray-200 rounded-md" 
+              aria-label="Editar servicio"
+            >
+              <Edit size={18} />
+            </button>
+            <button 
+              onClick={(e) => {
+                e.preventDefault(); // Prevenir la navegación del Link padre
+                // Lógica para eliminar el servicio aquí
+                console.log('Eliminar servicio:', service.id);
+              }}
+              className="p-2 text-gray-500 hover:text-error-500 bg-gray-100 hover:bg-gray-200 rounded-md" 
+              aria-label="Eliminar servicio"
+            >
+              <Trash2 size={18} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+})}
               </div>
             )}
           </div>
