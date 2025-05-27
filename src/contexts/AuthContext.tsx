@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { createClient, User as SupabaseAuthUser } from '@supabase/supabase-js';
+// src/contexts/AuthContext.tsx
+
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react'; // Añadir useRef
+import { createClient, User as SupabaseAuthUser, Session } from '@supabase/supabase-js'; // Añadir Session
 import { toast } from 'react-toastify';
 
-// Definición de AppUser (asegúrate que sea consistente donde la uses)
 export interface AppUser {
   id: string;
   email: string;
@@ -17,9 +18,6 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
-  // Expón setUser para que ProfilePage pueda actualizar el contexto.
-  // Considera si esto es la mejor práctica o si AuthContext debería tener una función updateUserProfile.
-  // Por ahora, lo exponemos según tu implementación actual en ProfilePage.
   setUser: React.Dispatch<React.SetStateAction<AppUser | null>>;
 }
 
@@ -42,252 +40,215 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AppUser | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const initialLoadDone = useRef(false); // Usar ref para marcar la carga inicial
 
-  console.log('[AuthContext] Component rendering/re-rendering. isLoading:', isLoading, 'User:', user ? {...user} : null, 'IsAuthenticated:', isAuthenticated);
+  console.log(`[AuthContext] Component rendering. isLoading: ${isLoading}, isAuthenticated: ${isAuthenticated}, User: ${user ? user.id : null}`);
 
   useEffect(() => {
-    console.log('[AuthContext] useEffect started. Setting up session listeners.');
     let isMounted = true;
+    console.log('[AuthContext] useEffect - START. isMounted:', isMounted, 'initialLoadDone.current:', initialLoadDone.current);
 
-    const handleValidAuthUser = async (authUser: SupabaseAuthUser, source: string) => {
-      console.log(`[AuthContext] ${source}: authUser is valid. ID: ${authUser.id}. Fetching profile from "users" table.`);
-      if (!authUser.email) {
-        console.warn(`[AuthContext] ${source}: authUser does not have an email. Cannot proceed to fetch profile.`, { authUser });
-        if (isMounted) {
-          setUser(null); // O manejar de otra forma un usuario sin email
-          setIsAuthenticated(false); // Si el email es mandatorio para tu app user
-        }
+    const processUserSession = async (authUser: SupabaseAuthUser | null, source: string) => {
+      if (!isMounted) {
+        console.log(`[AuthContext] processUserSession (${source}): Component unmounted. Aborting.`);
         return;
       }
 
-      try {
-        const { data: profile, error: profileError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', authUser.id)
-          .single();
-        console.log(`[AuthContext] ${source}: Profile fetch attempt completed.`, { profile, profileError });
+      if (authUser && authUser.email) {
+        console.log(`[AuthContext] processUserSession (${source}): authUser found (ID: ${authUser.id}). Fetching profile.`);
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', authUser.id)
+            .single();
 
-        if (!isMounted) {
-          console.log(`[AuthContext] ${source}: component unmounted after profile fetch, returning.`);
-          return;
-        }
-
-        const newAppUserData: AppUser = {
-          id: authUser.id,
-          email: authUser.email, // authUser.email ya fue verificado arriba
-          name: profile?.name || authUser.email.split('@')[0],
-          phone: profile?.phone || undefined,
-          avatar_url: profile?.avatar_url || undefined,
-        };
-
-        if (profileError) {
-          console.error(`[AuthContext] ${source}: Error fetching profile from 'users' table:`, profileError);
-          // Aun si hay error al obtener el perfil de 'users', el usuario está autenticado en Supabase Auth.
-          // Establecemos un usuario por defecto con los datos de Supabase Auth.
-          // La interfaz AppUser debe poder manejar un `name` por defecto y `phone`/`avatar_url` opcionales.
-          const defaultAppUser: AppUser = {
-            id: authUser.id,
-            email: authUser.email,
-            name: authUser.email.split('@')[0],
-          };
-          console.log(`[AuthContext] ${source}: Setting user to default (from auth) due to profileError.`, defaultAppUser);
-          setUser(defaultAppUser);
-          setIsAuthenticated(true); // El usuario está autenticado, aunque el perfil de 'users' falle
-        } else {
-          let userChanged = false;
-          if (!user) {
-            userChanged = true;
-          } else {
-            if (user.id !== newAppUserData.id) userChanged = true;
-            if (user.name !== newAppUserData.name) userChanged = true;
-            if (user.email !== newAppUserData.email) userChanged = true;
-            if (user.phone !== newAppUserData.phone) userChanged = true;
-            if (user.avatar_url !== newAppUserData.avatar_url) userChanged = true;
+          if (!isMounted) {
+            console.log(`[AuthContext] processUserSession (${source}): Component unmounted after profile fetch. Aborting.`);
+            return;
           }
 
-          if (userChanged) {
-            console.log(`[AuthContext] ${source}: User data changed or was null. Setting user.`, newAppUserData);
+          if (profileError) {
+            console.error(`[AuthContext] processUserSession (${source}): Error fetching profile:`, profileError);
+            const defaultAppUser: AppUser = {
+              id: authUser.id,
+              email: authUser.email,
+              name: authUser.email.split('@')[0],
+            };
+            setUser(defaultAppUser);
+            setIsAuthenticated(true);
+          } else {
+            const newAppUserData: AppUser = {
+              id: authUser.id,
+              email: authUser.email,
+              name: profile?.name || authUser.email.split('@')[0],
+              phone: profile?.phone || undefined,
+              avatar_url: profile?.avatar_url || undefined,
+            };
             setUser(newAppUserData);
-          } else {
-            console.log(`[AuthContext] ${source}: User data is the same. Not calling setUser from ${source}.`);
+            setIsAuthenticated(true);
+            console.log(`[AuthContext] processUserSession (${source}): Profile processed. User set.`, newAppUserData);
           }
-          // Asegurar que isAuthenticated sea true si llegamos aquí con un authUser válido
-          if(!isAuthenticated) setIsAuthenticated(true);
-        }
-      } catch (fetchError) {
-        console.error(`[AuthContext] ${source}: EXCEPTION during profile fetch:`, fetchError);
-        if (isMounted) {
-          console.log(`[AuthContext] ${source}: Setting user to null due to EXCEPTION in profile fetch.`);
+        } catch (fetchError) {
+          console.error(`[AuthContext] processUserSession (${source}): EXCEPTION during profile fetch:`, fetchError);
           setUser(null);
           setIsAuthenticated(false);
         }
+      } else {
+        console.log(`[AuthContext] processUserSession (${source}): No valid authUser or email missing. Clearing user state.`);
+        setUser(null);
+        setIsAuthenticated(false);
       }
-    };
 
-    const fetchInitialSession = async () => {
-      console.log('[AuthContext] fetchInitialSession started.');
-      try {
-        if (!isMounted) {
-          console.log('[AuthContext] fetchInitialSession: component unmounted, returning.');
-          return;
-        }
-        console.log('[AuthContext] fetchInitialSession: Calling supabase.auth.getSession().');
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log('[AuthContext] fetchInitialSession: supabase.auth.getSession() returned.', { session: session ? {...session, user: session.user ? {...session.user} : null } : null, sessionError });
-
-        if (!isMounted) return;
-
-        if (sessionError) {
-          console.error("[AuthContext] fetchInitialSession: Error getting initial session:", sessionError);
-          if (isMounted) { setUser(null); setIsAuthenticated(false); }
-        } else if (session && session.user) {
-          console.log('[AuthContext] fetchInitialSession: Session object found. Validating user with auth.getUser() for ID:', session.user.id);
-          const { data: { user: authUser }, error: authUserError } = await supabase.auth.getUser();
-
-          if (!isMounted) return;
-
-          if (authUserError || !authUser) {
-            console.warn('[AuthContext] fetchInitialSession: User from session is not valid or error fetching authUser. Clearing session state.', { authUserError, authUser });
-            if (isMounted) { setUser(null); setIsAuthenticated(false); }
-          } else {
-            await handleValidAuthUser(authUser, 'fetchInitialSession');
-          }
-        } else {
-          console.log('[AuthContext] fetchInitialSession: No session or no session.user found.');
-          if (isMounted) { setUser(null); setIsAuthenticated(false); }
-        }
-      } catch (e) {
-        console.error("[AuthContext] fetchInitialSession: Exception caught:", e);
-        if (isMounted) { setUser(null); setIsAuthenticated(false); }
-      } finally {
-        console.log('[AuthContext] fetchInitialSession: finally block. Calling setIsLoading(false).');
+      if (!initialLoadDone.current) {
+        console.log(`[AuthContext] processUserSession (${source}): Initial load sequence complete. Setting isLoading to false.`);
         setIsLoading(false);
+        initialLoadDone.current = true;
       }
     };
 
-    fetchInitialSession();
-
-    console.log('[AuthContext] Setting up onAuthStateChange listener.');
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[AuthContext] onAuthStateChange triggered. Event:', event, 'Raw Session Object:', session ? {...session, user: session.user ? {...session.user} : null } : null);
+    // 1. Check for an existing session right away
+    console.log('[AuthContext] useEffect: Attempting to get initial session.');
+    supabase.auth.getSession().then(async ({ data: { session }, error: sessionError }) => {
       if (!isMounted) {
-        console.log('[AuthContext] onAuthStateChange: component unmounted, returning.');
+        console.log('[AuthContext] useEffect (getSession): Component unmounted. Aborting.');
         return;
       }
-
-      if (session && session.user) {
-        console.log('[AuthContext] onAuthStateChange: Session object found. Validating user with auth.getUser() for ID:', session.user.id);
-        // No es estrictamente necesario llamar a getUser() aquí si confías en el 'session' del evento,
-        // pero puede ser una doble verificación. Si es problemático, puedes usar session.user directamente.
-        const { data: { user: authUserFromEvent }, error: authUserError } = await supabase.auth.getUser();
-
+      if (sessionError) {
+        console.error("[AuthContext] useEffect (getSession): Error getting initial session:", sessionError);
+        processUserSession(null, 'getSessionError');
+      } else if (session && session.user) {
+        console.log('[AuthContext] useEffect (getSession): Session found. User ID:', session.user.id);
+        // Double check with getUser for robustness, or trust session.user
+        const { data: { user: liveUser }, error: getUserError } = await supabase.auth.getUser();
         if (!isMounted) return;
-
-        const authUserToProcess = authUserError || !authUserFromEvent ? session.user : authUserFromEvent;
-
-
-        if (authUserError || !authUserToProcess) {
-          console.warn('[AuthContext] onAuthStateChange: User from event session is not valid or error fetching authUser. Clearing session state.', { authUserError, authUser: authUserToProcess });
-          if (isMounted) { setUser(null); setIsAuthenticated(false); }
+        if (getUserError || !liveUser) {
+            console.warn('[AuthContext] useEffect (getSession): User from session.user not confirmed by getUser. Using session.user for now or clearing.', { getUserError, liveUser, sessionUser: session.user });
+             processUserSession(session.user, 'getSession-liveUserError'); // Fallback to session.user or handle as error
         } else {
-          await handleValidAuthUser(authUserToProcess, 'onAuthStateChange');
+            processUserSession(liveUser, 'getSession-liveUserSuccess');
         }
+
       } else {
-        console.log('[AuthContext] onAuthStateChange: No session or no session.user.');
-        if (isMounted) { setUser(null); setIsAuthenticated(false); }
+        console.log('[AuthContext] useEffect (getSession): No active session found.');
+        processUserSession(null, 'getSessionNoSession');
       }
-      console.log('[AuthContext] onAuthStateChange: Finished processing.');
+    }).catch(error => {
+        if (!isMounted) return;
+        console.error("[AuthContext] useEffect (getSession): Promise rejection:", error);
+        processUserSession(null, 'getSessionPromiseCatch');
     });
+
+    // 2. Subscribe to auth state changes
+    console.log('[AuthContext] useEffect: Setting up onAuthStateChange listener.');
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!isMounted) {
+          console.log('[AuthContext] onAuthStateChange: Component unmounted. Aborting.');
+          return;
+        }
+        console.log('[AuthContext] onAuthStateChange: Event -', event, 'Session user ID -', session?.user?.id || 'null');
+        // When onAuthStateChange fires, it's a definitive update on the auth state.
+        // We can directly use session.user from here if available.
+        processUserSession(session?.user || null, `onAuthStateChange-${event}`);
+      }
+    );
 
     return () => {
-      console.log('[AuthContext] useEffect cleanup. Setting isMounted to false and unsubscribing.');
+      console.log('[AuthContext] useEffect - CLEANUP. Unsubscribing and setting isMounted to false.');
       isMounted = false;
-      subscription.unsubscribe();
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
-  }, []); // user e isAuthenticated no deberían estar aquí para evitar bucles de re-suscripción.
+  }, []); // Empty dependency array means this runs once on mount and cleans up on unmount.
 
   const login = async (email: string, password: string) => {
-    console.log('[AuthContext] login function called for email:', email);
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (authError) {
-      console.error('[AuthContext] login: authError:', authError);
-      if (authError.message.includes('Invalid login credentials')) {
-        throw new Error('Correo o contraseña incorrectos');
+    setIsLoading(true); // Set loading true during login attempt
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (authError) {
+        console.error('[AuthContext] login: authError:', authError);
+        toast.error(authError.message.includes('Invalid login credentials') ? 'Correo o contraseña incorrectos' : authError.message);
+        setIsLoading(false); // Reset loading on error
+        throw authError; // Re-throw to be caught by UI
       }
-      throw authError;
-    }
-
-    // onAuthStateChange se encargará de actualizar el usuario y isAuthenticated
-    if (authData.user) {
-        toast.success(`¡Bienvenido de nuevo!`);
-    } else {
-        console.warn('[AuthContext] login: authData.user is null/undefined.');
+      // onAuthStateChange will handle setting user and isAuthenticated.
+      // setIsLoading(false) will be handled by processUserSession via onAuthStateChange.
+      if (authData.user) {
+          toast.success(`¡Bienvenido de nuevo!`);
+      }
+    } catch (error) {
+      if (!String(error).includes('AuthApiError')) { // Avoid double toast for auth errors
+        toast.error('Error al iniciar sesión.');
+      }
+      setIsLoading(false); // Ensure loading is reset if something else goes wrong
+      throw error;
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
-    console.log('[AuthContext] register function called for email:', email, 'name:', name);
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    if (authError) {
-      console.error('[AuthContext] register: authError:', authError);
-      if (authError.message.includes('already registered')) {
-        throw new Error('Este correo ya está registrado');
+    setIsLoading(true); // Set loading true during registration attempt
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      if (authError) {
+        console.error('[AuthContext] register: authError:', authError);
+        toast.error(authError.message.includes('already registered') ? 'Este correo ya está registrado' : authError.message);
+        setIsLoading(false);
+        throw authError;
       }
-      throw authError;
-    }
 
-    if (authData.user && authData.user.email) {
-      console.log('[AuthContext] register: authData.user exists. Creating profile in "users" table.');
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: authData.user.id,
-            email: authData.user.email,
-            name: name,
-            // phone: '', // Podrías inicializar phone aquí si es necesario
-          }
-        ]);
-
-      if (profileError) {
-        console.error('[AuthContext] register: profileError creating user in "users" table:', profileError);
-        // Si falla la creación del perfil público, el usuario de auth existe pero el perfil no.
-        // Deberías decidir cómo manejar esto. ¿Eliminar el usuario de auth? ¿Reintentar?
-        // Por ahora, lanzaremos el error, pero onAuthStateChange podría establecer un usuario por defecto.
-        throw profileError;
+      if (authData.user && authData.user.email) {
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert([{ id: authData.user.id, email: authData.user.email, name: name }]);
+        if (profileError) {
+          console.error('[AuthContext] register: profileError:', profileError);
+          toast.error('Error al crear el perfil de usuario.');
+          // Consider how to handle this: sign out the user?
+          setIsLoading(false);
+          throw profileError;
+        }
+        // onAuthStateChange will handle setting user and isAuthenticated.
+        toast.success(`¡Bienvenido ${name}! Tu cuenta ha sido creada. Revisa tu correo para confirmar.`);
+      } else {
+        toast.error('No se pudo completar el registro.');
       }
-      console.log('[AuthContext] register: Profile created in "users" table.');
-      // onAuthStateChange debería recoger este nuevo usuario y perfil.
-      toast.success(`¡Bienvenido ${name}! Tu cuenta ha sido creada.`);
-    } else {
-        console.warn('[AuthContext] register: authData.user is null/undefined or email is missing.', { user: authData.user });
+    } catch (error) {
+      if (!String(error).includes('AuthApiError') && !String(error).includes('PostgrestError')) {
+         toast.error('Error durante el registro.');
+      }
+      setIsLoading(false);
+      throw error;
     }
   };
 
   const logout = async () => {
-    console.log('[AuthContext] logout function called.');
+    setIsLoading(true);
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error('[AuthContext] logout: error:', error);
+      toast.error('Error al cerrar sesión.');
+      setIsLoading(false); // Reset loading on error
       throw error;
     }
-    // User state will be cleared by onAuthStateChange
-    console.log('[AuthContext] logout: successful. User state will be updated by onAuthStateChange.');
+    // User state will be cleared by onAuthStateChange, which will also call setIsLoading(false)
+    // via processUserSession.
+    toast.success('Has cerrado sesión.');
   };
 
-  if (isLoading) {
+  if (isLoading && !initialLoadDone.current) { // Show loading only if initial load is not yet marked as done
     console.log('[AuthContext] Rendering "Loading app..." screen.');
     return <div className="flex justify-center items-center min-h-screen">Loading app...</div>;
   }
 
-  console.log('[AuthContext] Rendering children. isAuthenticated:', isAuthenticated, 'User:', user ? {...user} : null);
+  console.log(`[AuthContext] Rendering children. isLoading: ${isLoading}, isAuthenticated: ${isAuthenticated}`);
   return (
     <AuthContext.Provider
       value={{
@@ -296,7 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         isAuthenticated,
-        setUser, // Exponer setUser
+        setUser,
       }}
     >
       {children}
