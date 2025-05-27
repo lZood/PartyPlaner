@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { services as mockServicesData } from '../data/services'; // Import mock services
-import { Service as AppServiceType, Category as AppCategoryType, Subcategory as AppSubcategoryType } from '../types';
 import { Link, useParams } from 'react-router-dom';
 import Slider from 'react-slick';
 import { Star, Heart, CheckCircle, Truck, Calendar, Clock, MinusCircle, PlusCircle, Loader2 } from 'lucide-react';
-// Remove mock data import for services if you are fetching live data
-// import { services as mockServices } from '../data/services'; // KEEP THIS IF USED FOR 'similarServices' and not replacing that logic yet
-import { categories as mockCategories } from '../data/categories'; // Keep for category/subcategory name lookup if not fetching from DB
+import { categories as mockCategories } from '../data/categories'; //
+import { services as mockServicesData } from '../data/services'; // For similar services placeholder
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import AuthModal from '../components/auth/AuthModal';
+import { Service as AppServiceType, Category as AppCategoryType, Subcategory as AppSubcategoryType } from '../types';
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
@@ -41,12 +39,11 @@ const ServiceDetailPage: React.FC = () => {
 
       setIsLoading(true);
       try {
-        // 1. Fetch service data from 'services' table
         const { data: serviceData, error: serviceError } = await supabase
           .from('services')
           .select('*')
           .eq('id', serviceId)
-          .maybeSingle(); // Use maybeSingle() if it's possible the service doesn't exist
+          .maybeSingle();
 
         if (serviceError) {
           console.error('Error fetching service data:', serviceError);
@@ -62,28 +59,26 @@ const ServiceDetailPage: React.FC = () => {
           return;
         }
 
-        // 2. Fetch gallery images from 'service_images' table
         const { data: galleryData, error: galleryError } = await supabase
           .from('service_images')
-          .select('storage_path, is_main_image') // Select is_main_image as well
+          .select('storage_path, is_main_image')
           .eq('service_id', serviceId)
           .order('position', { ascending: true });
 
         if (galleryError) {
           console.error('Error fetching gallery images:', galleryError);
-          // Fallback or decide how to handle this, for now, continue
         }
 
-        let mainImageUrl = 'https://placehold.co/600x400?text=No+Principal';
+        let mainImageUrl = 'https://placehold.co/600x400?text=No+Imagen';
         const galleryImageUrls: string[] = [];
 
         if (galleryData && galleryData.length > 0) {
           let mainImageRecord = galleryData.find(img => img.is_main_image);
-          if (!mainImageRecord) { // If no explicit main image, take the first by position
+          if (!mainImageRecord && galleryData[0]) {
             mainImageRecord = galleryData[0];
           }
 
-          if (mainImageRecord && mainImageRecord.storage_path) {
+          if (mainImageRecord?.storage_path) {
              const { data: mainUrlData } = supabase.storage
               .from('service-images')
               .getPublicUrl(mainImageRecord.storage_path);
@@ -105,29 +100,24 @@ const ServiceDetailPage: React.FC = () => {
         }
 
 
-        // 4. Map to the Service type
         const populatedService: AppServiceType = {
           id: serviceData.id,
           name: serviceData.name,
           description: serviceData.description,
-          shortDescription: serviceData.short_description, // DB uses snake_case
+          shortDescription: serviceData.short_description,
           price: serviceData.price,
           imageUrl: mainImageUrl,
-          gallery: galleryImageUrls.length > 0 ? galleryImageUrls : [mainImageUrl],
-          categoryId: serviceData.category_id, // DB uses snake_case
-          subcategoryId: serviceData.subcategory_id, // DB uses snake_case
+          gallery: galleryImageUrls.length > 0 ? galleryImageUrls : (mainImageUrl !== 'https://placehold.co/600x400?text=No+Imagen' ? [mainImageUrl] : []),
+          categoryId: serviceData.category_id,
+          subcategoryId: serviceData.subcategory_id,
           rating: serviceData.rating,
-          reviewCount: serviceData.review_count, // DB uses snake_case
+          reviewCount: serviceData.review_count,
           features: serviceData.features || [],
-          // availability and options would need to be fetched if they are in separate tables
-          // For now, initializing as empty or undefined if not directly on serviceData
-           availability: serviceData.availability || [], // Placeholder
-           options: serviceData.options || [], // Placeholder
+          availability: serviceData.availability || [], // Placeholder, fetch if needed
+          options: serviceData.options || [], // Placeholder, fetch if needed
         };
         setService(populatedService);
 
-        // Fetch category and subcategory details from mockCategories
-        // In a full DB setup, these would also be fetched or joined.
         const cat = mockCategories.find((c) => c.id === populatedService.categoryId); //
         if (cat) {
           setCategory(cat);
@@ -147,9 +137,8 @@ const ServiceDetailPage: React.FC = () => {
     };
 
     fetchServiceDetails();
-  }, [serviceId]); // Removed supabase from dependencies for now, assuming it's stable. Add if needed.
+  }, [serviceId]);
 
-  // Original useEffect for document title and scroll
   useEffect(() => {
     if (service) {
       document.title = `${service.name} | CABETG Party Planner`;
@@ -159,8 +148,6 @@ const ServiceDetailPage: React.FC = () => {
     }
   }, [service, isLoading]);
 
-
-  // Calculate price with options (keep existing logic)
   const calculateTotalPrice = () => {
     if (!service || !service.price) return null;
     let totalPrice = service.price * quantity;
@@ -184,12 +171,7 @@ const ServiceDetailPage: React.FC = () => {
     arrows: true,
   };
 
-  // Similar services: This part might still use mock data or need adjustment
-  // For now, let's assume it tries to filter based on the loaded service's category/subcategory.
-  // You might need to fetch these separately or adjust logic if mockServices is removed.
-  const { services: mockServices } = React.useContext(require('../data/services')); // If you need mockServices
-
-  const similarServices = service ? mockServices // Use mockServices (or your actual services data source)
+  const similarServices = service ? mockServicesData //
     .filter(
       (s: AppServiceType) =>
         s.id !== serviceId &&
@@ -238,10 +220,8 @@ const ServiceDetailPage: React.FC = () => {
     );
   }
   
-  // Conditional rendering for breadcrumbs if category/subcategory names are not found
-  const categoryName = category ? category.name : service.categoryId;
-  const subcategoryName = subcategory ? subcategory.name : service.subcategoryId;
-
+  const categoryName = category ? category.name : (service.categoryId || 'Categoría');
+  const subcategoryName = subcategory ? subcategory.name : (service.subcategoryId || 'Subcategoría');
 
   return (
     <div className="bg-gray-50 py-12">
@@ -273,6 +253,12 @@ const ServiceDetailPage: React.FC = () => {
                 <span className="mx-2 text-gray-400">/</span>
               </li>
             )}
+             {(!category && service.categoryId) && (
+              <li className="flex items-center">
+                <span className="text-gray-500">{categoryName}</span>
+                <span className="mx-2 text-gray-400">/</span>
+              </li>
+            )}
             {subcategory && category && (
               <li className="flex items-center">
                 <Link to={`/category/${category.id}/${subcategory.id}`} className="text-gray-500 hover:text-primary-500">
@@ -280,6 +266,12 @@ const ServiceDetailPage: React.FC = () => {
                 </Link>
                 <span className="mx-2 text-gray-400">/</span>
               </li>
+            )}
+            {(!subcategory && service.subcategoryId && category) && (
+                 <li className="flex items-center">
+                    <span className="text-gray-500">{subcategoryName}</span>
+                    <span className="mx-2 text-gray-400">/</span>
+                </li>
             )}
             <li className="text-primary-500 font-medium">{service.name}</li>
           </ol>
@@ -291,7 +283,7 @@ const ServiceDetailPage: React.FC = () => {
               {service.gallery && service.gallery.length > 0 ? (
                 <Slider {...sliderSettings}>
                   {service.gallery.map((image, index) => (
-                    <div key={index} className="h-96"> {/* Ensure consistent height for slider images */}
+                    <div key={index} className="h-96">
                       <img
                         src={image}
                         alt={`${service.name} - Imagen ${index + 1}`}
@@ -304,7 +296,7 @@ const ServiceDetailPage: React.FC = () => {
               ) : (
                 <div className="h-96 flex items-center justify-center bg-gray-100">
                    <img
-                        src={service.imageUrl} // Fallback to main imageUrl if gallery is empty
+                        src={service.imageUrl}
                         alt={service.name}
                         className="w-full h-full object-cover"
                         onError={(e) => (e.currentTarget.src = 'https://placehold.co/600x400?text=Error+Img')}
@@ -314,7 +306,6 @@ const ServiceDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Service Info */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-md p-6">
               <div className="flex justify-between items-start mb-4">
@@ -416,7 +407,6 @@ const ServiceDetailPage: React.FC = () => {
 
               <div className="mb-6">
                 <div className="grid grid-cols-2 gap-3">
-                  {/* Service Highlights - consider fetching these or making them generic */}
                   <div className="flex items-center text-sm text-gray-600">
                     <Truck size={16} className="mr-2 text-primary-500" />
                     <span>Disponibilidad variable</span>
@@ -454,7 +444,7 @@ const ServiceDetailPage: React.FC = () => {
                     Ver mi carrito
                   </Link>
                   <button
-                    onClick={handleAddToCart} // This could be 'updateCartItem'
+                    onClick={handleAddToCart}
                     className="btn w-full bg-primary-500 hover:bg-primary-600 text-white py-3 rounded-lg font-medium"
                   >
                     Actualizar Cantidad y Opciones
@@ -472,12 +462,11 @@ const ServiceDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Description and Features */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
           <div className="lg:col-span-2">
             <div className="bg-white rounded-xl shadow-md p-6 mb-8">
               <h2 className="text-xl font-bold mb-4">Descripción</h2>
-              <p className="text-gray-700 mb-6 whitespace-pre-line">{service.description}</p> {/* Added whitespace-pre-line */}
+              <p className="text-gray-700 mb-6 whitespace-pre-line">{service.description}</p>
 
               <h3 className="font-bold mb-3">Características</h3>
               <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -490,15 +479,92 @@ const ServiceDetailPage: React.FC = () => {
               </ul>
             </div>
 
-            {/* Reviews: This section would need a separate data fetching logic */}
             <div className="bg-white rounded-xl shadow-md p-6">
-              {/* ... existing reviews placeholder ... */}
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold">Reseñas</h2>
+                <button className="text-primary-500 font-medium hover:underline">
+                  Ver todas
+                </button>
+              </div>
+              <div className="space-y-6">
+                {[1, 2].map((_, index) => ( // Placeholder reviews
+                  <div key={index} className="pb-6 border-b border-gray-200 last:border-0">
+                    <div className="flex justify-between mb-2">
+                      <div className="flex items-center">
+                        <div className="w-10 h-10 rounded-full bg-gray-300 mr-3"></div>
+                        <div>
+                          <div className="font-medium">Cliente Satisfecho</div>
+                          <div className="text-sm text-gray-500">Hace 2 semanas</div>
+                        </div>
+                      </div>
+                      <div className="flex text-warning-500">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} size={16} fill="currentColor" strokeWidth={0} />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-gray-700">
+                      Excelente servicio, totalmente recomendado. Cumplieron con todas las expectativas y el personal fue muy amable.
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Similar Services: This section still uses mock data */}
           <div className="lg:col-span-1">
-             {/* ... existing similar services placeholder ... */}
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h2 className="text-xl font-bold mb-4">Servicios Similares</h2>
+              <div className="space-y-4">
+                {similarServices.length > 0 ? (
+                  similarServices.map((similarService) => (
+                    <Link
+                      key={similarService.id}
+                      to={`/service/${similarService.id}`}
+                      className="flex items-start p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <img
+                        src={similarService.imageUrl}
+                        alt={similarService.name}
+                        className="w-20 h-16 object-cover rounded mr-3"
+                        onError={(e) => (e.currentTarget.src = 'https://placehold.co/300x200?text=Error+Img')}
+                      />
+                      <div>
+                        <h3 className="font-medium hover:text-primary-500 transition-colors">
+                          {similarService.name}
+                        </h3>
+                        <div className="flex items-center text-sm mb-1">
+                          <div className="flex text-warning-500">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                size={12}
+                                fill={i < Math.floor(similarService.rating) ? "currentColor" : "none"}
+                                strokeWidth={i < Math.floor(similarService.rating) ? 0 : 1.5}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-gray-600 ml-1">
+                            ({similarService.reviewCount})
+                          </span>
+                        </div>
+                        <div className="font-medium">
+                          {similarService.price ? (
+                            `$${similarService.price.toLocaleString('es-MX')}`
+                          ) : (
+                            <span className="text-primary-500">Cotizar</span>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  ))
+                ) : (
+                  <p className="text-gray-600">
+                    No hay servicios similares disponibles en este momento.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
