@@ -97,31 +97,63 @@ const ProfilePage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      console.log('[ProfilePage] Not authenticated, navigating to home.');
-      navigate('/');
-      return; 
-    }
-    if (user?.id){
-        document.title = 'Mi Perfil | CABETG Party Planner'; //
-        const fetchServices = async () => {
-          console.log(`[ProfilePage] Fetching services for provider_id: ${user.id}`);
-          const { data: servicesData, error } = await supabase
-            .from('services')
-            .select('*')
-            .eq('provider_id', user.id); //
+  if (!isAuthenticated) {
+    console.log('[ProfilePage] Not authenticated, navigating to home.');
+    navigate('/');
+    return;
+  }
+  if (user?.id) {
+    document.title = 'Mi Perfil | CABETG Party Planner';
+    const fetchServices = async () => {
+      console.log(`[ProfilePage] Fetching services for provider_id: ${user.id}`);
+      const { data: servicesData, error: servicesError } = await supabase
+        .from('services')
+        .select('*')
+        .eq('provider_id', user.id);
 
-          if (error) {
-            console.error('[ProfilePage] Error fetching services:', error);
-            toast.error(`Error al cargar tus servicios: ${error.message}`);
-            return;
-          }
-          console.log('[ProfilePage] Services fetched:', servicesData);
-          setMyServices(servicesData as Service[]);
-        };
-        fetchServices();
-    }
-  }, [isAuthenticated, navigate, user]);
+      if (servicesError) {
+        console.error('[ProfilePage] Error fetching services:', servicesError);
+        toast.error(`Error al cargar tus servicios: ${servicesError.message}`);
+        return;
+      }
+
+      if (servicesData) {
+        const servicesWithImages = await Promise.all(
+          servicesData.map(async (service) => {
+            const { data: mainImageData, error: mainImageError } = await supabase
+              .from('service_images')
+              .select('storage_path')
+              .eq('service_id', service.id)
+              .eq('is_main_image', true)
+              .single();
+
+            // Use a more reliable placeholder
+            let publicUrl = 'https://placehold.co/300x200?text=Sin+Imagen';
+            if (mainImageError) {
+              console.warn(`[ProfilePage] Error fetching main image for service ${service.id}:`, mainImageError.message);
+            } else if (mainImageData && mainImageData.storage_path) {
+              const { data: urlData } = supabase.storage
+                .from('service-images') // Ensure this is your bucket name
+                .getPublicUrl(mainImageData.storage_path);
+              if (urlData) {
+                publicUrl = urlData.publicUrl;
+              } else {
+                 console.warn(`[ProfilePage] Could not get public URL for ${mainImageData.storage_path}`);
+              }
+            }
+            // Assuming 'imageUrl' in your Service type is meant to hold the final display URL
+            return { ...service, imageUrl: publicUrl, gallery: [] }; // Add gallery: [] if your type requires it and it's not fetched here
+          })
+        );
+        console.log('[ProfilePage] Services fetched with images:', servicesWithImages);
+        setMyServices(servicesWithImages as Service[]);
+      } else {
+        setMyServices([]);
+      }
+    };
+    fetchServices();
+  }
+}, [isAuthenticated, navigate, user, supabase]); // Add supabase to dependency array if it's not stable
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
