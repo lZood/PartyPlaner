@@ -60,11 +60,16 @@ const CategoryPicker: React.FC<CategoryPickerProps> = ({
           <button
             key={category.id}
             onClick={() => onSelect(category.id)}
-            className={`flex items-center px-4 py-2 rounded-full border ${
-              selectedCategory === category.id
-                ? 'bg-primary-50 text-primary-600 border-primary-200'
+            className={`w-full flex items-center p-2 hover:bg-gray-50 rounded transition-colors ${
+              selectedCategory === category.id ? 'bg-primary-50 text-primary-600 border-primary-200' : 'bg-gray-50 text-gray-700 border-gray-200'
+            }`}
+            className={`
+              flex items-center px-4 py-2 rounded-full border
+              ${selectedCategory === category.id 
+                ? 'bg-primary-50 text-primary-600 border-primary-200' 
                 : 'bg-gray-50 text-gray-700 border-gray-200'
-            } hover:border-primary-300 transition-colors`}
+              } hover:border-primary-300 transition-colors
+            `}
           >
             <span className="mr-2">{getCategoryIcon(category.id)}</span>
             <span className="text-sm font-medium">{category.name}</span>
