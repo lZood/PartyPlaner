@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, LogOut, Settings, Loader2 } from 'lucide-react'; // Importar Loader2
+import { User, LogOut, Settings, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import AuthModal from '../auth/AuthModal';
 
@@ -11,7 +11,7 @@ interface UserMenuProps {
 const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false); // ESTADO LOCAL para la carga del logout
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -28,16 +28,15 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
   }, []);
 
   const handleLogout = async () => {
-    setIsLoggingOut(true); // Iniciar estado de carga del logout
+    setIsLoggingOut(true);
     try {
       await logout();
       setIsOpen(false);
       navigate('/');
     } catch (error) {
       console.error('Error logging out:', error);
-      // Aquí podrías mostrar una notificación de error al usuario si lo deseas
     } finally {
-      setIsLoggingOut(false); // Finalizar estado de carga, independientemente del resultado
+      setIsLoggingOut(false);
     }
   };
 
@@ -76,11 +75,21 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
             Mi Perfil
           </Link>
 
+          {/* CORRECCIÓN AQUÍ */}
           <button
             onClick={handleLogout}
             className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-            disabled={isLoggingOut} {/* Usar el estado local isLoggingOut */}
-          >
+            disabled={isLoggingOut} {/* Usar el estado local isLoggingOut */}> 
+            {/* El ">" se movió al final de esta línea, después del comentario si decides mantenerlo, 
+                o simplemente al final de la propiedad 'disabled' si el comentario es problemático. 
+                Lo más simple es asegurarse que el ">" esté justo después del último atributo.
+                Si el comentario causa problemas, puede ir dentro del cuerpo del botón o eliminarse.
+                Para este caso, he puesto el ">" después de "disabled={isLoggingOut}". 
+                Si el comentario original " {/* Usar el estado local isLoggingOut */} " 
+                estaba después de `disabled={isLoggingOut}`, la línea sería:
+                disabled={isLoggingOut} {/* Usar el estado local isLoggingOut */}>
+                Lo importante es que el `>` esté antes del contenido del botón.
+            */}
             {isLoggingOut ? (
               <Loader2 size={16} className="mr-3 animate-spin text-gray-500" />
             ) : (
