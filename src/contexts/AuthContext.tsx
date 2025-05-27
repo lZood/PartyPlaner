@@ -38,24 +38,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+      try {
+        if (session) {
+          const { data: profile, error: profileError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
 
-        setUser({
-          id: session.user.id,
-          email: session.user.email!,
-          name: profile?.name || session.user.email!.split('@')[0]
-        });
-        setIsAuthenticated(true);
-      } else {
+          if (profileError) {
+            console.error('Error fetching profile:', profileError);
+            // Set user based on session, default name if profile fails
+            setUser({
+              id: session.user.id,
+              email: session.user.email!,
+              name: session.user.email!.split('@')[0] 
+            });
+            setIsAuthenticated(true);
+          } else {
+            setUser({
+              id: session.user.id,
+              email: session.user.email!,
+              name: profile?.name || session.user.email!.split('@')[0]
+            });
+            setIsAuthenticated(true);
+          }
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      } catch (error) {
+        console.error("Error processing auth state change:", error);
         setUser(null);
         setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false); // Ensure loading is always stopped
       }
-      setIsLoading(false); // Set loading to false after session is processed
     });
 
     return () => {
