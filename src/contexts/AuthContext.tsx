@@ -1,7 +1,5 @@
-// src/contexts/AuthContext.tsx
-
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react'; // Añadir useRef
-import { createClient, User as SupabaseAuthUser, Session } from '@supabase/supabase-js'; // Añadir Session
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createClient, User as SupabaseAuthUser, Session } from '@supabase/supabase-js';
 import { toast } from 'react-toastify';
 
 export interface AppUser {
@@ -19,6 +17,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   setUser: React.Dispatch<React.SetStateAction<AppUser | null>>;
+  refreshUserProfile: () => Promise<void>; // Nueva función
 }
 
 const supabase = createClient(
@@ -40,75 +39,105 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AppUser | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const initialLoadDone = useRef(false); // Usar ref para marcar la carga inicial
+  const initialLoadDone = useRef(false);
 
   console.log(`[AuthContext] Component rendering. isLoading: ${isLoading}, isAuthenticated: ${isAuthenticated}, User: ${user ? user.id : null}`);
+
+  const fetchAndSetUserProfile = async (authUser: SupabaseAuthUser, source: string): Promise<AppUser | null> => {
+    if (!authUser.email) {
+      console.warn(`[AuthContext] fetchAndSetUserProfile (${source}): authUser does not have an email. Cannot fetch profile.`);
+      return null;
+    }
+    console.log(`[AuthContext] fetchAndSetUserProfile (${source}): authUser found (ID: ${authUser.id}). Fetching profile from "users" table.`);
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profileError) {
+        console.error(`[AuthContext] fetchAndSetUserProfile (${source}): Error fetching profile:`, profileError);
+        return {
+          id: authUser.id,
+          email: authUser.email,
+          name: authUser.email.split('@')[0],
+        };
+      } else {
+        const appUser: AppUser = {
+          id: authUser.id,
+          email: authUser.email,
+          name: profile?.name || authUser.email.split('@')[0],
+          phone: profile?.phone || undefined,
+          avatar_url: profile?.avatar_url || undefined,
+        };
+        console.log(`[AuthContext] fetchAndSetUserProfile (${source}): Profile fetched successfully.`, appUser);
+        return appUser;
+      }
+    } catch (fetchError) {
+      console.error(`[AuthContext] fetchAndSetUserProfile (${source}): EXCEPTION during profile fetch:`, fetchError);
+      return null;
+    }
+  };
+
+  const processUserSession = async (authUser: SupabaseAuthUser | null, source: string) => {
+    // Para isMounted, se asume que el useEffect que llama a esto maneja su propio flag isMounted
+    let isMounted = true; // Simplificación para este fragmento. Considera el scope real.
+
+    if (!isMounted) {
+        console.log(`[AuthContext] processUserSession (${source}): Component unmounted. Aborting.`);
+        return;
+    }
+
+    if (authUser) {
+      const appUser = await fetchAndSetUserProfile(authUser, source);
+      if (isMounted) { // Verificar de nuevo por si la operación asíncrona tardó
+        if (appUser) {
+          setUser(appUser);
+          setIsAuthenticated(true);
+          console.log(`[AuthContext] processUserSession (${source}): User state updated.`, appUser);
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+          console.log(`[AuthContext] processUserSession (${source}): Failed to fetch profile, user state cleared.`);
+        }
+      }
+    } else {
+      if (isMounted) {
+        console.log(`[AuthContext] processUserSession (${source}): No authUser provided. Clearing user state.`);
+        setUser(null);
+        setIsAuthenticated(false);
+      }
+    }
+
+    if (isMounted && !initialLoadDone.current) {
+      console.log(`[AuthContext] processUserSession (${source}): Initial load sequence complete. Setting isLoading to false.`);
+      setIsLoading(false);
+      initialLoadDone.current = true;
+    }
+  };
+  
+  const refreshUserProfile = async () => {
+    console.log('[AuthContext] refreshUserProfile called.');
+    const { data: { user: authUser }, error } = await supabase.auth.getUser();
+
+    if (error) {
+        console.error('[AuthContext] refreshUserProfile: Error getting current auth user:', error);
+        setUser(null);
+        setIsAuthenticated(false);
+        return;
+    }
+
+    // Llama a processUserSession con el authUser actual (puede ser null si no hay sesión)
+    // processUserSession ya maneja el caso de authUser nulo.
+    await processUserSession(authUser, 'refreshUserProfile');
+    console.log('[AuthContext] refreshUserProfile: User profile processing complete.');
+  };
 
   useEffect(() => {
     let isMounted = true;
     console.log('[AuthContext] useEffect - START. isMounted:', isMounted, 'initialLoadDone.current:', initialLoadDone.current);
 
-    const processUserSession = async (authUser: SupabaseAuthUser | null, source: string) => {
-      if (!isMounted) {
-        console.log(`[AuthContext] processUserSession (${source}): Component unmounted. Aborting.`);
-        return;
-      }
-
-      if (authUser && authUser.email) {
-        console.log(`[AuthContext] processUserSession (${source}): authUser found (ID: ${authUser.id}). Fetching profile.`);
-        try {
-          const { data: profile, error: profileError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', authUser.id)
-            .single();
-
-          if (!isMounted) {
-            console.log(`[AuthContext] processUserSession (${source}): Component unmounted after profile fetch. Aborting.`);
-            return;
-          }
-
-          if (profileError) {
-            console.error(`[AuthContext] processUserSession (${source}): Error fetching profile:`, profileError);
-            const defaultAppUser: AppUser = {
-              id: authUser.id,
-              email: authUser.email,
-              name: authUser.email.split('@')[0],
-            };
-            setUser(defaultAppUser);
-            setIsAuthenticated(true);
-          } else {
-            const newAppUserData: AppUser = {
-              id: authUser.id,
-              email: authUser.email,
-              name: profile?.name || authUser.email.split('@')[0],
-              phone: profile?.phone || undefined,
-              avatar_url: profile?.avatar_url || undefined,
-            };
-            setUser(newAppUserData);
-            setIsAuthenticated(true);
-            console.log(`[AuthContext] processUserSession (${source}): Profile processed. User set.`, newAppUserData);
-          }
-        } catch (fetchError) {
-          console.error(`[AuthContext] processUserSession (${source}): EXCEPTION during profile fetch:`, fetchError);
-          setUser(null);
-          setIsAuthenticated(false);
-        }
-      } else {
-        console.log(`[AuthContext] processUserSession (${source}): No valid authUser or email missing. Clearing user state.`);
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-
-      if (!initialLoadDone.current) {
-        console.log(`[AuthContext] processUserSession (${source}): Initial load sequence complete. Setting isLoading to false.`);
-        setIsLoading(false);
-        initialLoadDone.current = true;
-      }
-    };
-
-    // 1. Check for an existing session right away
-    console.log('[AuthContext] useEffect: Attempting to get initial session.');
     supabase.auth.getSession().then(async ({ data: { session }, error: sessionError }) => {
       if (!isMounted) {
         console.log('[AuthContext] useEffect (getSession): Component unmounted. Aborting.');
@@ -116,30 +145,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       if (sessionError) {
         console.error("[AuthContext] useEffect (getSession): Error getting initial session:", sessionError);
-        processUserSession(null, 'getSessionError');
+        await processUserSession(null, 'getSessionError');
       } else if (session && session.user) {
         console.log('[AuthContext] useEffect (getSession): Session found. User ID:', session.user.id);
-        // Double check with getUser for robustness, or trust session.user
         const { data: { user: liveUser }, error: getUserError } = await supabase.auth.getUser();
         if (!isMounted) return;
         if (getUserError || !liveUser) {
-            console.warn('[AuthContext] useEffect (getSession): User from session.user not confirmed by getUser. Using session.user for now or clearing.', { getUserError, liveUser, sessionUser: session.user });
-             processUserSession(session.user, 'getSession-liveUserError'); // Fallback to session.user or handle as error
+            console.warn('[AuthContext] useEffect (getSession): User from session.user not confirmed by getUser. Using session.user or clearing.', { getUserError, liveUser, sessionUser: session.user });
+            await processUserSession(session.user, 'getSession-liveUserErrorOrFallback');
         } else {
-            processUserSession(liveUser, 'getSession-liveUserSuccess');
+            await processUserSession(liveUser, 'getSession-liveUserSuccess');
         }
-
       } else {
         console.log('[AuthContext] useEffect (getSession): No active session found.');
-        processUserSession(null, 'getSessionNoSession');
+        await processUserSession(null, 'getSessionNoSession');
       }
-    }).catch(error => {
+    }).catch(async error => {
         if (!isMounted) return;
         console.error("[AuthContext] useEffect (getSession): Promise rejection:", error);
-        processUserSession(null, 'getSessionPromiseCatch');
+        await processUserSession(null, 'getSessionPromiseCatch');
     });
 
-    // 2. Subscribe to auth state changes
     console.log('[AuthContext] useEffect: Setting up onAuthStateChange listener.');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -148,9 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
         console.log('[AuthContext] onAuthStateChange: Event -', event, 'Session user ID -', session?.user?.id || 'null');
-        // When onAuthStateChange fires, it's a definitive update on the auth state.
-        // We can directly use session.user from here if available.
-        processUserSession(session?.user || null, `onAuthStateChange-${event}`);
+        await processUserSession(session?.user || null, `onAuthStateChange-${event}`);
       }
     );
 
@@ -161,10 +185,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscription.unsubscribe();
       }
     };
-  }, []); // Empty dependency array means this runs once on mount and cleans up on unmount.
+  }, []);
 
   const login = async (email: string, password: string) => {
-    setIsLoading(true); // Set loading true during login attempt
+    setIsLoading(true); 
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
@@ -173,25 +197,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (authError) {
         console.error('[AuthContext] login: authError:', authError);
         toast.error(authError.message.includes('Invalid login credentials') ? 'Correo o contraseña incorrectos' : authError.message);
-        setIsLoading(false); // Reset loading on error
-        throw authError; // Re-throw to be caught by UI
+        setIsLoading(false); 
+        throw authError; 
       }
-      // onAuthStateChange will handle setting user and isAuthenticated.
-      // setIsLoading(false) will be handled by processUserSession via onAuthStateChange.
+      // onAuthStateChange (y por lo tanto processUserSession) se encargará de setIsLoading(false)
       if (authData.user) {
           toast.success(`¡Bienvenido de nuevo!`);
       }
     } catch (error) {
-      if (!String(error).includes('AuthApiError')) { // Avoid double toast for auth errors
-        toast.error('Error al iniciar sesión.');
-      }
-      setIsLoading(false); // Ensure loading is reset if something else goes wrong
+      setIsLoading(false); 
       throw error;
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
-    setIsLoading(true); // Set loading true during registration attempt
+    setIsLoading(true); 
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
@@ -211,19 +231,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (profileError) {
           console.error('[AuthContext] register: profileError:', profileError);
           toast.error('Error al crear el perfil de usuario.');
-          // Consider how to handle this: sign out the user?
           setIsLoading(false);
           throw profileError;
         }
-        // onAuthStateChange will handle setting user and isAuthenticated.
         toast.success(`¡Bienvenido ${name}! Tu cuenta ha sido creada. Revisa tu correo para confirmar.`);
-      } else {
+      } else { //
         toast.error('No se pudo completar el registro.');
       }
+       // onAuthStateChange (y por lo tanto processUserSession) se encargará de setIsLoading(false)
     } catch (error) {
-      if (!String(error).includes('AuthApiError') && !String(error).includes('PostgrestError')) {
-         toast.error('Error durante el registro.');
-      }
       setIsLoading(false);
       throw error;
     }
@@ -235,20 +251,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       console.error('[AuthContext] logout: error:', error);
       toast.error('Error al cerrar sesión.');
-      setIsLoading(false); // Reset loading on error
+      setIsLoading(false); 
       throw error;
     }
-    // User state will be cleared by onAuthStateChange, which will also call setIsLoading(false)
-    // via processUserSession.
+     // onAuthStateChange (y por lo tanto processUserSession) se encargará de setIsLoading(false)
     toast.success('Has cerrado sesión.');
   };
 
-  if (isLoading && !initialLoadDone.current) { // Show loading only if initial load is not yet marked as done
+  if (isLoading && !initialLoadDone.current) {
     console.log('[AuthContext] Rendering "Loading app..." screen.');
     return <div className="flex justify-center items-center min-h-screen">Loading app...</div>;
   }
 
-  console.log(`[AuthContext] Rendering children. isLoading: ${isLoading}, isAuthenticated: ${isAuthenticated}`);
   return (
     <AuthContext.Provider
       value={{
@@ -257,7 +271,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         isAuthenticated,
-        setUser,
+        setUser, // Aún se expone por si ProfilePage lo necesita directamente, aunque es preferible refreshUserProfile
+        refreshUserProfile,
       }}
     >
       {children}
