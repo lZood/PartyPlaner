@@ -135,8 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       throw error;
     }
-    setUser(null);
-    setIsAuthenticated(false);
+    // setUser(null) and setIsAuthenticated(false) are now handled by onAuthStateChange
   };
 
   if (isLoading) {
