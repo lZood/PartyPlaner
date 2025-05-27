@@ -1,4 +1,11 @@
 // Type definitions for the application
+export interface AppUser {
+  id: string;
+  email: string;
+  name: string;
+  phone?: string; // Asegúrate de que 'phone' esté aquí
+  avatar_url?: string;
+}
 
 export interface Category {
   id: string;
