@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Plus, Package, Star, Edit, Trash2, X, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { categories } from '../data/categories';
-import { Service } from '../types'; // Asegúrate que Service esté bien definida
+import { Service } from '../types';
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'react-toastify';
 import { AppUser } from '../contexts/AuthContext'; // Importar AppUser desde AuthContext
@@ -29,10 +29,11 @@ const ProfilePage: React.FC = () => {
   const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
   const [isSubmittingService, setIsSubmittingService] = useState(false);
 
-  const [formData, setFormData] = useState<Partial<AppUser>>({ // Usar Partial<AppUser> o campos explícitos
+  const [formData, setFormData] = useState<Partial<AppUser>>({
     name: '',
-    email: '', // El email se mostrará del contexto, no se enviará para actualización
+    email: '',
     phone: '',
+    avatar_url: '',
   });
 
   const [serviceFormData, setServiceFormData] = useState({
@@ -51,30 +52,26 @@ const ProfilePage: React.FC = () => {
       console.log('[ProfilePage] useEffect updating formData from user context:', user);
       setFormData({
         name: user.name || '',
-        email: user.email || '', // Para mostrarlo, no para edición
+        email: user.email || '',
         phone: user.phone || '',
+        avatar_url: user.avatar_url || '',
       });
     }
-  }, [user]); // Dependencia del objeto user del contexto
+  }, [user]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>, isMain: boolean = false) => {
-    // ... (sin cambios)
     const files = e.target.files;
     if (!files) return;
-
     const maxSize = 5 * 1024 * 1024; // 5MB
-    
     Array.from(files).forEach(file => {
       if (file.size > maxSize) {
         toast.error('El archivo es demasiado grande. El tamaño máximo es 5MB.');
         return;
       }
-
       const reader = new FileReader();
       reader.onload = (eventReader) => {
         const preview = eventReader.target?.result as string;
         const imageUpload: ImageUpload = { file, preview, isMain };
-
         if (isMain) {
           setMainImage(imageUpload);
         } else {
@@ -92,7 +89,6 @@ const ProfilePage: React.FC = () => {
   };
 
   const removeImage = (index: number, isMain: boolean = false) => {
-    // ... (sin cambios)
     if (isMain) {
       setMainImage(null);
     } else {
@@ -104,7 +100,11 @@ const ProfilePage: React.FC = () => {
     if (!isAuthenticated) {
       console.log('[ProfilePage] Not authenticated, navigating to home.');
       navigate('/');
-    } else if (user?.id){ // Asegurarse que user.id existe
+      return; // Salir temprano si no está autenticado
+    }
+    // Si está autenticado, pero el user aún no está cargado, useAuth podría estar en proceso.
+    // El return condicional al final del componente se encargará de mostrar "Cargando perfil..."
+    if (user?.id){
         document.title = 'Mi Perfil | CABETG Party Planner';
         const fetchServices = async () => {
           console.log(`[ProfilePage] Fetching services for provider_id: ${user.id}`);
@@ -119,15 +119,11 @@ const ProfilePage: React.FC = () => {
             return;
           }
           console.log('[ProfilePage] Services fetched:', servicesData);
-          setMyServices(servicesData as Service[]); // Asume que los datos son compatibles
+          setMyServices(servicesData as Service[]);
         };
         fetchServices();
-    } else if (isAuthenticated && !user?.id) {
-        console.warn('[ProfilePage] Authenticated but user.id is missing. User object:', user);
-        // Podría ser un estado transitorio mientras AuthContext carga el usuario.
-        // O un problema si el usuario se autentica pero no se establece correctamente.
     }
-  }, [isAuthenticated, navigate, user]); // Dependencia en 'user' completo para reaccionar a cambios
+  }, [isAuthenticated, navigate, user]);
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,9 +140,10 @@ const ProfilePage: React.FC = () => {
     setIsSubmittingProfile(true);
 
     try {
-      const updates = {
+      const updates: Partial<AppUser> = { // Tipar updates
         name: formData.name,
         phone: formData.phone,
+        avatar_url: formData.avatar_url, // Asumiendo que avatar_url es parte de AppUser y formData
         updated_at: new Date().toISOString(),
       };
 
@@ -160,24 +157,23 @@ const ProfilePage: React.FC = () => {
       if (error) {
         console.error('[ProfilePage] Error updating profile in Supabase:', error);
         toast.error(`Error al actualizar el perfil: ${error.message}`);
-        // No lanzar el error aquí para que el finally se ejecute
       } else {
         toast.success('Perfil actualizado con éxito!');
         console.log('[ProfilePage] Profile updated successfully in Supabase.');
 
-        if (setAuthUser) { // setAuthUser viene de useAuth()
+        if (setAuthUser) {
           const updatedUserContextData: AppUser = {
             id: user.id,
-            email: user.email, // El email no cambia
-            name: formData.name!, // formData.name debería estar definido
+            email: user.email,
+            name: formData.name!,
             phone: formData.phone,
-            avatar_url: user.avatar_url, // Mantener el avatar_url existente del contexto
+            avatar_url: formData.avatar_url || user.avatar_url, // Mantener el avatar_url si no se actualiza
           };
           console.log('[ProfilePage] Calling setAuthUser from AuthContext with:', updatedUserContextData);
           setAuthUser(updatedUserContextData);
         }
       }
-    } catch (error) { // Captura errores inesperados, los de Supabase se manejan arriba
+    } catch (error) {
       console.error('[ProfilePage] Catch block: Unexpected error updating profile:', error);
       toast.error('Ocurrió un error inesperado al actualizar el perfil.');
     } finally {
@@ -187,26 +183,22 @@ const ProfilePage: React.FC = () => {
   };
 
   const handleServiceSubmit = async (e: React.FormEvent) => {
-    // ... (sin cambios significativos en esta función, asegúrate que 'user' exista y tenga 'id', 'name', 'email')
     e.preventDefault();
     if (!user || !user.id || !user.name || !user.email) {
         toast.error("Debes estar autenticado y tu perfil debe estar completo para crear un servicio.");
         return;
     }
     setIsSubmittingService(true);
-
     try {
       if (!mainImage) {
         toast.error('Por favor selecciona una imagen principal');
-        setIsSubmittingService(false); // Resetear estado si hay error temprano
+        setIsSubmittingService(false);
         return;
       }
-
       const mainImageFileName = `${user.id}/${Date.now()}_${mainImage.file.name.replace(/\s/g, '_')}`;
       const { data: mainUploadData, error: mainImageError } = await supabase.storage
         .from('service-images')
         .upload(mainImageFileName, mainImage.file);
-
       if (mainImageError) throw mainImageError;
       const mainImageStoragePath = mainUploadData.path;
 
@@ -231,64 +223,39 @@ const ProfilePage: React.FC = () => {
         provider_name: user.name,
         provider_email: user.email,
         features: serviceFormData.features.filter(f => f.trim() !== ''),
-        is_approved: false,
-        rating: 0,
-        review_count: 0
+        is_approved: false, rating: 0, review_count: 0
       };
-
       const { data: newService, error: serviceError } = await supabase
         .from('services')
-        .insert(serviceToInsert)
-        .select()
-        .single();
-
+        .insert(serviceToInsert).select().single();
       if (serviceError) throw serviceError;
       if (!newService) throw new Error("No se pudo obtener el servicio creado.");
 
       const serviceImagesToInsert = [{
-        service_id: newService.id,
-        storage_path: mainImageStoragePath,
-        is_main_image: true,
-        position: 0
+        service_id: newService.id, storage_path: mainImageStoragePath,
+        is_main_image: true, position: 0
       }];
       galleryStoragePaths.forEach((path, index) => {
         serviceImagesToInsert.push({
-          service_id: newService.id,
-          storage_path: path,
-          is_main_image: false,
-          position: index + 1
+          service_id: newService.id, storage_path: path,
+          is_main_image: false, position: index + 1
         });
       });
-
-      const { error: serviceImagesError } = await supabase
-        .from('service_images')
-        .insert(serviceImagesToInsert);
-
+      const { error: serviceImagesError } = await supabase.from('service_images').insert(serviceImagesToInsert);
       if (serviceImagesError) throw serviceImagesError;
 
       toast.success('Servicio publicado con éxito! Pendiente de aprobación.');
-      setShowServiceForm(false);
-      setMainImage(null);
-      setGalleryImages([]);
+      setShowServiceForm(false); setMainImage(null); setGalleryImages([]);
       setServiceFormData({
         name: '', categoryId: '', subcategoryId: '', shortDescription: '',
         description: '', price: '', features: [''],
       });
-
-        // Refrescar la lista de servicios del usuario
-        if (user?.id) { // user.id ya verificado al inicio de la función
+      if (user?.id) {
             const { data: updatedServicesData, error: fetchError } = await supabase
-            .from('services')
-            .select('*')
-            .eq('provider_id', user.id);
-
-            if (fetchError) {
-                console.error('[ProfilePage] Error fetching updated services after creation:', fetchError);
-            } else if (updatedServicesData) {
-                setMyServices(updatedServicesData as Service[]);
-            }
-        }
-
+            .from('services').select('*').eq('provider_id', user.id);
+            if (fetchError) console.error('[ProfilePage] Error fetching updated services after creation:', fetchError);
+            else if (updatedServicesData) setMyServices(updatedServicesData as Service[]);
+      }
     } catch (error: any) {
       console.error('[ProfilePage] Error creating service:', error);
       toast.error(`Error al crear el servicio: ${error.message || 'Error desconocido'}`);
@@ -298,18 +265,17 @@ const ProfilePage: React.FC = () => {
   };
 
   const handleAddFeature = () => {
-    // ... (sin cambios)
-    setServiceFormData(prev => ({
-      ...prev,
-      features: [...prev.features, '']
-    }));
+    setServiceFormData(prev => ({ ...prev, features: [...prev.features, ''] }));
   };
   
-  // Renderizado condicional mientras se espera al usuario del contexto
-  if (isLoading || !user) { // isLoading de AuthContext o si user aún es null
+  // CORRECCIÓN AQUÍ:
+  // Renderizado condicional basado en isAuthenticated y la existencia de user.
+  // AuthContext ya maneja su propio isLoading para la carga inicial de la app.
+  if (!isAuthenticated || !user) {
+    console.log('[ProfilePage] Rendering loading/redirect: isAuthenticated:', isAuthenticated, 'user:', user);
     return <div className="flex justify-center items-center min-h-screen">Cargando perfil...</div>;
   }
-  // ... (resto del JSX sin cambios significativos, pero revisa las props de formData)
+
   return (
     <div className="bg-gray-50 py-12">
       <div className="container-custom max-w-4xl">
@@ -363,7 +329,7 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="text"
                   id="profileName"
-                  value={formData.name}
+                  value={formData.name || ''} // Usar || '' para evitar undefined en el input
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
                 />
@@ -381,7 +347,7 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="email"
                   id="profileEmail"
-                  value={formData.email}
+                  value={formData.email || ''} // Usar || ''
                   readOnly 
                   disabled 
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed focus:outline-none focus:ring-0"
@@ -400,13 +366,33 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="tel"
                   id="profilePhone"
-                  value={formData.phone || ''}
+                  value={formData.phone || ''} // Usar || ''
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
                   placeholder="Ej. 5512345678"
                 />
               </div>
             </div>
+            {/* Campo para avatar_url si lo implementas en el formulario
+            <div>
+              <label htmlFor="profileAvatarUrl" className="block text-sm font-medium text-gray-700 mb-1">
+                URL del Avatar (opcional)
+              </label>
+              <div className="relative">
+                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <ImageIcon size={18} />
+                </span>
+                <input
+                  type="url"
+                  id="profileAvatarUrl"
+                  value={formData.avatar_url || ''}
+                  onChange={(e) => setFormData({ ...formData, avatar_url: e.target.value })}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
+                  placeholder="https://ejemplo.com/imagen.png"
+                />
+              </div>
+            </div>
+            */}
 
             <div className="pt-6 border-t border-gray-200">
               <button
@@ -427,6 +413,7 @@ const ProfilePage: React.FC = () => {
           </form>
         </div>
         ) : (
+          // ... (resto de la pestaña Mis Servicios sin cambios)
           <div className="space-y-6">
             {/* Services Header */}
             <div className="flex justify-between items-center">
