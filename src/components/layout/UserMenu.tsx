@@ -79,17 +79,7 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
           <button
             onClick={handleLogout}
             className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-            disabled={isLoggingOut} {/* Usar el estado local isLoggingOut */}> 
-            {/* El ">" se movió al final de esta línea, después del comentario si decides mantenerlo, 
-                o simplemente al final de la propiedad 'disabled' si el comentario es problemático. 
-                Lo más simple es asegurarse que el ">" esté justo después del último atributo.
-                Si el comentario causa problemas, puede ir dentro del cuerpo del botón o eliminarse.
-                Para este caso, he puesto el ">" después de "disabled={isLoggingOut}". 
-                Si el comentario original " {/* Usar el estado local isLoggingOut */} " 
-                estaba después de `disabled={isLoggingOut}`, la línea sería:
-                disabled={isLoggingOut} {/* Usar el estado local isLoggingOut */}>
-                Lo importante es que el `>` esté antes del contenido del botón.
-            */}
+            disabled={isLoggingOut} 
             {isLoggingOut ? (
               <Loader2 size={16} className="mr-3 animate-spin text-gray-500" />
             ) : (
