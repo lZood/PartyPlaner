@@ -36,122 +36,174 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  console.log('[AuthContext] Component rendering/re-rendering. isLoading:', isLoading);
+
   useEffect(() => {
+    console.log('[AuthContext] useEffect started. Setting up session listeners.');
     let isMounted = true;
 
     const fetchInitialSession = async () => {
+      console.log('[AuthContext] fetchInitialSession started.');
       try {
-        // Guard against setting state if unmounted
-        if (!isMounted) return; 
-        
+        if (!isMounted) {
+          console.log('[AuthContext] fetchInitialSession: component unmounted, returning.');
+          return;
+        }
+        console.log('[AuthContext] fetchInitialSession: Calling supabase.auth.getSession().');
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log('[AuthContext] fetchInitialSession: supabase.auth.getSession() returned.', { session, sessionError });
 
-        if (!isMounted) return; // Check again after await
+        if (!isMounted) {
+          console.log('[AuthContext] fetchInitialSession: component unmounted after getSession, returning.');
+          return;
+        }
 
         if (sessionError) {
-          console.error("Error getting initial session:", sessionError);
+          console.error("[AuthContext] fetchInitialSession: Error getting initial session:", sessionError);
           if (isMounted) {
+            console.log('[AuthContext] fetchInitialSession: Setting user to null due to sessionError.');
             setUser(null);
             setIsAuthenticated(false);
           }
         } else if (session) {
+          console.log('[AuthContext] fetchInitialSession: Session found. Fetching profile for user ID:', session.user.id);
           const { data: profile, error: profileError } = await supabase
             .from('users')
             .select('*')
             .eq('id', session.user.id)
             .single();
+          console.log('[AuthContext] fetchInitialSession: Profile fetched.', { profile, profileError });
 
-          if (!isMounted) return; // Check again
+          if (!isMounted) {
+            console.log('[AuthContext] fetchInitialSession: component unmounted after profile fetch, returning.');
+            return;
+          }
 
           if (profileError) {
-            console.error('Error fetching profile for initial session:', profileError);
+            console.error('[AuthContext] fetchInitialSession: Error fetching profile for initial session:', profileError);
             if (isMounted) {
-              setUser({
+              const defaultUser = {
                 id: session.user.id,
                 email: session.user.email!,
-                name: session.user.email!.split('@')[0] // Default name
-              });
+                name: session.user.email!.split('@')[0]
+              };
+              console.log('[AuthContext] fetchInitialSession: Setting user to default due to profileError.', defaultUser);
+              setUser(defaultUser);
               setIsAuthenticated(true);
             }
           } else if (isMounted) {
-            setUser({
+            const userData = {
               id: session.user.id,
               email: session.user.email!,
               name: profile?.name || session.user.email!.split('@')[0]
-            });
+            };
+            console.log('[AuthContext] fetchInitialSession: Setting user with profile data.', userData);
+            setUser(userData);
             setIsAuthenticated(true);
           }
         } else { // No session
+          console.log('[AuthContext] fetchInitialSession: No session found.');
           if (isMounted) {
+            console.log('[AuthContext] fetchInitialSession: Setting user to null (no session).');
             setUser(null);
             setIsAuthenticated(false);
           }
         }
       } catch (e) {
-        console.error("Exception in fetchInitialSession:", e);
+        console.error("[AuthContext] fetchInitialSession: Exception caught:", e);
         if (isMounted) {
+          console.log('[AuthContext] fetchInitialSession: Setting user to null due to exception.');
           setUser(null);
           setIsAuthenticated(false);
         }
       } finally {
+        console.log('[AuthContext] fetchInitialSession: finally block. Current isMounted:', isMounted);
+        // Original logic:
+        // if (isMounted) {
+        //   console.log('[AuthContext] fetchInitialSession: Calling setIsLoading(false).');
+        //   setIsLoading(false);
+        // } else {
+        //   console.log('[AuthContext] fetchInitialSession: Not calling setIsLoading(false) because isMounted is false.');
+        // }
+        // Forcing setIsLoading(false) to debug if it's the isMounted check causing issues:
+        console.log('[AuthContext] fetchInitialSession: Forcing setIsLoading(false).');
         setIsLoading(false);
-        
       }
     };
 
     fetchInitialSession();
 
+    console.log('[AuthContext] Setting up onAuthStateChange listener.');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
+      console.log('[AuthContext] onAuthStateChange triggered. Event:', event, 'Session:', session);
+      if (!isMounted) {
+        console.log('[AuthContext] onAuthStateChange: component unmounted, returning.');
+        return;
+      }
 
       if (session) {
+        console.log('[AuthContext] onAuthStateChange: Session exists. Fetching profile for user ID:', session.user.id);
         const { data: profile, error: profileError } = await supabase
           .from('users')
           .select('*')
           .eq('id', session.user.id)
           .single();
+        console.log('[AuthContext] onAuthStateChange: Profile fetched.', { profile, profileError });
 
-        if (!isMounted) return; // Check again
+        if (!isMounted) {
+            console.log('[AuthContext] onAuthStateChange: component unmounted after profile fetch, returning.');
+            return;
+        }
 
         if (profileError) {
-          console.error('Error fetching profile onAuthStateChange:', profileError);
+          console.error('[AuthContext] onAuthStateChange: Error fetching profile:', profileError);
           if (isMounted) {
-            setUser({
+            const defaultUser = {
               id: session.user.id,
               email: session.user.email!,
-              name: session.user.email!.split('@')[0] // Default name
-            });
+              name: session.user.email!.split('@')[0]
+            };
+            console.log('[AuthContext] onAuthStateChange: Setting user to default due to profileError.', defaultUser);
+            setUser(defaultUser);
             setIsAuthenticated(true);
           }
         } else if (isMounted) {
-          setUser({
+          const userData = {
             id: session.user.id,
             email: session.user.email!,
             name: profile?.name || session.user.email!.split('@')[0]
-          });
+          };
+          console.log('[AuthContext] onAuthStateChange: Setting user with profile data.', userData);
+          setUser(userData);
           setIsAuthenticated(true);
         }
       } else { // No session
+        console.log('[AuthContext] onAuthStateChange: No session.');
         if (isMounted) {
+          console.log('[AuthContext] onAuthStateChange: Setting user to null.');
           setUser(null);
           setIsAuthenticated(false);
         }
       }
       // IMPORTANT: No setIsLoading(false) here in onAuthStateChange
+      console.log('[AuthContext] onAuthStateChange: Finished processing.');
     });
 
     return () => {
+      console.log('[AuthContext] useEffect cleanup. Setting isMounted to false and unsubscribing.');
       isMounted = false;
       subscription.unsubscribe();
     };
   }, []); // Empty dependency array ensures this runs once on mount and cleans up on unmount
 
   const login = async (email: string, password: string) => {
+    console.log('[AuthContext] login function called for email:', email);
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     if (authError) {
+      console.error('[AuthContext] login: authError:', authError);
       if (authError.message.includes('Invalid login credentials')) {
         throw new Error('Correo o contraseña incorrectos');
       }
@@ -159,28 +211,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (authData.user) {
+      console.log('[AuthContext] login: authData.user exists. Fetching profile.');
       const { data: profile } = await supabase
         .from('users')
         .select('*')
         .eq('id', authData.user.id)
         .single();
+      console.log('[AuthContext] login: Profile fetched.', { profile });
 
-      setUser({
+      const userData = {
         id: authData.user.id,
         email: authData.user.email!,
         name: profile?.name || authData.user.email!.split('@')[0]
-      });
+      };
+      console.log('[AuthContext] login: Setting user.', userData);
+      setUser(userData);
       setIsAuthenticated(true);
       toast.success(`¡Bienvenido de nuevo!`);
+    } else {
+        console.log('[AuthContext] login: authData.user is null/undefined.');
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
+    console.log('[AuthContext] register function called for email:', email, 'name:', name);
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
     });
     if (authError) {
+      console.error('[AuthContext] register: authError:', authError);
       if (authError.message.includes('already registered')) {
         throw new Error('Este correo ya está registrado');
       }
@@ -188,7 +248,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (authData.user) {
-      // Create user profile
+      console.log('[AuthContext] register: authData.user exists. Creating profile.');
       const { error: profileError } = await supabase
         .from('users')
         .insert([
@@ -200,31 +260,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ]);
 
       if (profileError) {
+        console.error('[AuthContext] register: profileError:', profileError);
         throw profileError;
       }
+      console.log('[AuthContext] register: Profile created.');
 
-      setUser({
+      const userData = {
         id: authData.user.id,
         email: authData.user.email!,
         name: name
-      });
+      };
+      console.log('[AuthContext] register: Setting user.', userData);
+      setUser(userData);
       setIsAuthenticated(true);
       toast.success(`¡Bienvenido ${name}!`);
+    } else {
+        console.log('[AuthContext] register: authData.user is null/undefined.');
     }
   };
 
   const logout = async () => {
+    console.log('[AuthContext] logout function called.');
     const { error } = await supabase.auth.signOut();
     if (error) {
+      console.error('[AuthContext] logout: error:', error);
       throw error;
     }
+    console.log('[AuthContext] logout: successful. User state will be updated by onAuthStateChange.');
     // setUser(null) and setIsAuthenticated(false) are now handled by onAuthStateChange
   };
 
   if (isLoading) {
+    console.log('[AuthContext] Rendering "Loading app..." screen.');
     return <div className="flex justify-center items-center min-h-screen">Loading app...</div>;
   }
 
+  console.log('[AuthContext] Rendering children. isAuthenticated:', isAuthenticated, 'User:', user);
   return (
     <AuthContext.Provider
       value={{
