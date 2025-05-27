@@ -6,7 +6,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import LocationPicker from './LocationPicker';
 import DatePickerModal from './DatePickerModal';
 import CategoryPicker from './CategoryPicker';
-import { geocodeAddressNominatim, GeocodingResult } from '../../pages/geocoding'; // Corrected path
+import { geocodeAddressNominatim, GeocodingResult } from '../utils/geocoding'; // Corrected path/home/project/src/utils/geocoding.ts
 import { toast } from 'react-toastify';
 
 const useClickOutside = (ref: React.RefObject<HTMLElement>, handler: () => void) => {
