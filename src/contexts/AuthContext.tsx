@@ -142,11 +142,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (session) {
-        console.log('[AuthContext] onAuthStateChange: Session exists. Fetching profile for user ID:', session.user.id);
+        console.log('[AuthContext] onAuthStateChange: Session exists. Fetching profile for user ID:', session.user.id); // Este log aparece
+        // LA SIGUIENTE LLAMADA ES LA PROBLEMÁTICA O ALGO JUSTO ANTES DE ELLA
         const { data: profile, error: profileError } = await supabase
-          .from('users')
+          .from('users') // Tu tabla pública 'users'
           .select('*')
-          .eq('id', session.user.id)
+          .eq('id', session.user.id) // Usando el session.user.id que dices que no existe en auth.users
           .single();
         console.log('[AuthContext] onAuthStateChange: Profile fetched.', { profile, profileError });
 
