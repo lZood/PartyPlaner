@@ -1,7 +1,9 @@
+// src/pages/ProfilePage.tsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Plus, Package, Star, Edit, Trash2, X, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+// Asegúrate de que refreshUserProfile esté disponible en el hook useAuth
+import { useAuth } from '../contexts/AuthContext'; //
 import { categories } from '../data/categories'; //
 import { Service } from '../types'; //
 import { createClient } from '@supabase/supabase-js'; //
@@ -20,7 +22,8 @@ const supabase = createClient(
 );
 
 const ProfilePage: React.FC = () => {
-  const { user, isAuthenticated, setUser: setAuthUser } = useAuth(); //
+  // Desestructura refreshUserProfile del contexto
+  const { user, isAuthenticated, refreshUserProfile } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'profile' | 'services'>('profile');
   const [showServiceForm, setShowServiceForm] = useState(false);
@@ -143,7 +146,6 @@ const ProfilePage: React.FC = () => {
         name: formData.name,
         phone: formData.phone,
         avatar_url: formData.avatar_url ? formData.avatar_url : null,
-        // No enviar 'updated_at' desde el cliente; deja que la base de datos lo maneje.
       };
 
       console.log('[ProfilePage] Attempting to update profile for user ID:', user.id, 'with data:', updates);
@@ -163,7 +165,14 @@ const ProfilePage: React.FC = () => {
         toast.error(`Error al actualizar el perfil: ${error.message}`);
       } else {
         toast.success('Perfil actualizado con éxito!');
-        console.log('[ProfilePage] Profile updated successfully in Supabase.');
+        console.log('[ProfilePage] Profile updated successfully in Supabase. Attempting to refresh user profile from context...');
+        
+        if (refreshUserProfile) {
+            await refreshUserProfile();
+            console.log('[ProfilePage] User profile refresh initiated via context.');
+        } else {
+            console.warn('[ProfilePage] refreshUserProfile function is not available in AuthContext.');
+        }
       }
     } catch (errorCatch) { 
       console.error('[ProfilePage] Catch block: Unexpected error updating profile:', errorCatch);
@@ -297,11 +306,15 @@ const ProfilePage: React.FC = () => {
         {activeTab === 'profile' ? (
           <div className="bg-white rounded-xl shadow-md p-6 md:p-8">
           <div className="flex items-center mb-8">
-            <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center">
-              <User size={40} className="text-primary-500" />
+            <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center overflow-hidden"> {/* Added overflow-hidden */}
+              {formData.avatar_url ? (
+                <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <User size={40} className="text-primary-500" />
+              )}
             </div>
             <div className="ml-6">
-              <h2 className="text-2xl font-bold">{formData.name || ''}</h2>
+              <h2 className="text-2xl font-bold">{formData.name || 'Usuario'}</h2>
               <p className="text-gray-600">{formData.email || ''}</p>
             </div>
           </div>
@@ -401,6 +414,7 @@ const ProfilePage: React.FC = () => {
           </form>
         </div>
         ) : (
+          // Pestaña "Mis Servicios"
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Mis Servicios Publicados</h2>
@@ -454,7 +468,7 @@ const ProfilePage: React.FC = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300"
                         >
                           <option value="">Seleccionar categoría</option>
-                          {categories.map(category => ( //
+                          {categories.map(category => (
                             <option key={category.id} value={category.id}>
                               {category.name}
                             </option>
@@ -475,9 +489,9 @@ const ProfilePage: React.FC = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 disabled:bg-gray-100"
                         >
                           <option value="">Seleccionar subcategoría</option>
-                          {categories //
+                          {categories
                             .find(cat => cat.id === serviceFormData.categoryId)
-                            ?.subcategories.map(subcat => ( //
+                            ?.subcategories.map(subcat => (
                               <option key={subcat.id} value={subcat.id}>
                                 {subcat.name}
                               </option>
@@ -621,25 +635,25 @@ const ProfilePage: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Características (una por línea)
                       </label>
-                      {serviceFormData.features.map((feature, index) => ( //
+                      {serviceFormData.features.map((feature, index) => (
                         <div key={index} className="flex gap-2 mb-2">
                           <input
                             type="text"
                             value={feature}
                             onChange={(e) => {
-                              const newFeatures = [...serviceFormData.features]; //
-                              newFeatures[index] = e.target.value; //
-                              setServiceFormData({ ...serviceFormData, features: newFeatures }); //
+                              const newFeatures = [...serviceFormData.features];
+                              newFeatures[index] = e.target.value;
+                              setServiceFormData({ ...serviceFormData, features: newFeatures });
                             }}
                             className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300"
                             placeholder={`Característica ${index + 1}`}
                           />
-                          {serviceFormData.features.length > 1 && ( //
+                          {serviceFormData.features.length > 1 && (
                             <button
                                 type="button"
-                                onClick={() => { //
-                                const newFeatures = serviceFormData.features.filter((_, i) => i !== index); //
-                                setServiceFormData({ ...serviceFormData, features: newFeatures }); //
+                                onClick={() => {
+                                const newFeatures = serviceFormData.features.filter((_, i) => i !== index);
+                                setServiceFormData({ ...serviceFormData, features: newFeatures });
                                 }}
                                 className="p-2 text-gray-400 hover:text-error-500"
                                 aria-label={`Eliminar característica ${index + 1}`}
@@ -668,10 +682,10 @@ const ProfilePage: React.FC = () => {
                       </button>
                       <button
                         type="submit"
-                        disabled={isSubmittingService} //
+                        disabled={isSubmittingService}
                         className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-70 flex items-center justify-center"
                       >
-                        {isSubmittingService ? ( //
+                        {isSubmittingService ? (
                             <>
                                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                                 Publicando...
@@ -686,7 +700,7 @@ const ProfilePage: React.FC = () => {
               </div>
             )}
 
-            {myServices.length === 0 && !showServiceForm ? ( //
+            {myServices.length === 0 && !showServiceForm ? (
               <div className="bg-white rounded-xl shadow-md p-8 text-center">
                 <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Package className="text-primary-500" size={32} />
@@ -698,15 +712,16 @@ const ProfilePage: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {myServices.map(service => { //
-                  const displayImageUrl = service.imageUrl || 'https://via.placeholder.com/300x200?text=Sin+Imagen'; //
+                {myServices.map(service => {
+                  const displayImageUrl = service.imageUrl || 'https://via.placeholder.com/300x200?text=Sin+Imagen';
+                  
                   return (
                     <div key={service.id} className="bg-white rounded-xl shadow-md overflow-hidden">
                         <img
-                        src={displayImageUrl} //
+                        src={displayImageUrl}
                         alt={service.name}
                         className="w-full h-48 object-cover"
-                        onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/300x200?text=Error+Img')} //
+                        onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/300x200?text=Error+Img')}
                         />
                         <div className="p-6">
                         <h3 className="text-xl font-semibold mb-2">{service.name}</h3>
