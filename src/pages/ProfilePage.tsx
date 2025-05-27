@@ -728,4 +728,22 @@ const ProfilePage: React.FC = () => {
                         <div className="p-6">
                         <h3 className="text-xl font-semibold mb-2">{service.name}</h3>
                         <p className="text-gray-600 text-sm mb-4 line-clamp-2">{service.shortDescription}</p>
-                        <div className="
+                        <div className="flex justify-between items-center mt-4"> {/* Added classes and closed the quote */}
+                          <span className="text-lg font-bold">{/* Price logic here */}</span>
+                          {/* Action buttons (Edit/Delete) here */}
+                        </div>
+                        {/* Ensure the parent div of this block and other tags are closed */}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ProfilePage;
