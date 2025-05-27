@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, LogOut, Settings } from 'lucide-react';
+import { User, LogOut, Settings, Loader2 } from 'lucide-react'; // Importar Loader2 para el ícono de carga
 import { useAuth } from '../../contexts/AuthContext';
 import AuthModal from '../auth/AuthModal';
 
@@ -11,6 +11,7 @@ interface UserMenuProps {
 const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false); // Estado local para la carga del logout
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -27,54 +28,65 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
   }, []);
 
   const handleLogout = async () => {
+    setIsLoggingOut(true); // Iniciar estado de carga
     try {
       await logout();
       setIsOpen(false);
       navigate('/');
     } catch (error) {
       console.error('Error logging out:', error);
+      // Aquí podrías mostrar una notificación de error al usuario si lo deseas
+    } finally {
+      setIsLoggingOut(false); // Finalizar estado de carga, independientemente del resultado
     }
-    setIsOpen(false);
   };
 
   const handleAuthSuccess = () => {
     setShowAuthModal(false);
-    setIsOpen(false);
+    setIsOpen(false); // Asegúrate de que el menú se cierre si la autenticación es exitosa desde aquí
   };
 
   return (
     <div className={`relative ${className}`} ref={menuRef}>
       <button
-        onClick={() => isAuthenticated ? setIsOpen(!isOpen) : setShowAuthModal(true)}
+        onClick={() => (isAuthenticated ? setIsOpen(!isOpen) : setShowAuthModal(true))}
         className="text-gray-700 hover:text-primary-500 focus:outline-none"
         aria-label="User menu"
       >
         <User size={24} />
       </button>
 
-      {isOpen && isAuthenticated && (
-        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-50">
-          <div className="px-4 py-2 border-b border-gray-200">
-            <div className="font-medium truncate">{user?.name}</div>
-            <div className="text-sm text-gray-500 truncate">{user?.email}</div>
+      {isOpen && isAuthenticated && user && ( // Añadida verificación de user por si acaso
+        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg py-1 z-50 ring-1 ring-black ring-opacity-5">
+          <div className="px-4 py-3 border-b border-gray-200">
+            <p className="text-sm font-medium text-gray-900 truncate" title={user.name}>
+              {user.name}
+            </p>
+            <p className="text-xs text-gray-500 truncate" title={user.email}>
+              {user.email}
+            </p>
           </div>
 
           <Link
             to="/profile"
-            className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100"
+            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
             onClick={() => setIsOpen(false)}
           >
-            <Settings size={16} className="mr-2" />
+            <Settings size={16} className="mr-3 text-gray-500" />
             Mi Perfil
           </Link>
 
           <button
             onClick={handleLogout}
-            className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-100"
-            disabled={isLoading}
+            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+            disabled={isLoggingOut} // Usar el estado local isLoggingOut
           >
-            <LogOut size={16} className="mr-2" />
-            Cerrar Sesión
+            {isLoggingOut ? (
+              <Loader2 size={16} className="mr-3 animate-spin text-gray-500" />
+            ) : (
+              <LogOut size={16} className="mr-3 text-gray-500" />
+            )}
+            {isLoggingOut ? 'Cerrando Sesión...' : 'Cerrar Sesión'}
           </button>
         </div>
       )}
