@@ -22,7 +22,6 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
         setIsOpen(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -75,11 +74,12 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
             Mi Perfil
           </Link>
 
-          {/* CORRECCIÓN AQUÍ */}
           <button
             onClick={handleLogout}
             className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-            disabled={isLoggingOut} 
+            disabled={isLoggingOut} // El ">" debe estar aquí para cerrar la etiqueta de apertura
+          > 
+            {/* El contenido del botón (hijos) comienza DESPUÉS del ">" de arriba */}
             {isLoggingOut ? (
               <Loader2 size={16} className="mr-3 animate-spin text-gray-500" />
             ) : (
