@@ -24,21 +24,49 @@ export interface Subcategory {
   categoryId: string;
 }
 
+export interface ServiceCoverageArea {
+  id: string;
+  service_id: string;
+  area_name: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postal_code?: string;
+  // latitude?: number; // Descomenta si los añades en el SQL
+  // longitude?: number; // Descomenta si los añades en el SQL
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Service {
   id: string;
   name: string;
   description: string;
-  availability?: ServiceAvailability[];
-  shortDescription: string;
-  price: number | null; // null means "request quote"
+  shortDescription: string; // Coincide con short_description en DB
+  price: number | null;
   imageUrl: string;
   gallery: string[];
-  categoryId: string;
-  subcategoryId: string;
+  categoryId: string; // Coincide con category_id en DB
+  subcategoryId: string; // Coincide con subcategory_id en DB
   rating: number;
-  reviewCount: number;
+  reviewCount: number; // Coincide con review_count en DB
   features: string[];
   options?: ServiceOption[];
+  availability?: ServiceAvailability[]; // Ya existe
+
+  // Nuevos campos de la migración
+  service_type: 'fixed_location' | 'delivery_area' | 'multiple_areas';
+  specific_address?: string;
+  base_latitude?: number;
+  base_longitude?: number;
+  delivery_radius_km?: number;
+  coverage_areas?: ServiceCoverageArea[]; // Para cuando se obtengan las áreas de cobertura
+  provider_id?: string; // Asegúrate de que este campo esté si lo usas para validaciones
+  // Campos del proveedor que ya estaban en la tabla services
+  provider_name?: string;
+  provider_phone?: string;
+  provider_email?: string;
+  is_approved?: boolean;
 }
 
 export interface ServiceOption {
