@@ -33,76 +33,23 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const updateUserState = async (userId: string, email: string) => {
-    try {
-      const { data: profile, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (!profile) {
-        // User profile doesn't exist yet, create it
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert([
-            {
-              id: userId,
-              email: email,
-              name: email.split('@')[0],
-            }
-          ]);
-
-        if (insertError) throw insertError;
-
-        // Fetch the newly created profile
-        const { data: newProfile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', userId)
-          .single();
-
-        setUser({
-          id: userId,
-          email: email,
-          name: newProfile.name
-        });
-      } else if (error) {
-        throw error;
-      } else {
-        setUser({
-          id: userId,
-          email: email,
-          name: profile.name
-        });
-      }
-
-      setIsAuthenticated(true);
-    } catch (err) {
-      console.error('Error updating user state:', err);
-      throw err;
-    }
-  };
 
   useEffect(() => {
     // Check active session
-    setIsLoading(true);
-    
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await updateUserState(session.user.id, session.user.email!);
-      }
-      setIsLoading(false);
-    };
-
-    checkSession();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
-        await updateUserState(session.user.id, session.user.email!);
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        setUser({
+          id: session.user.id,
+          email: session.user.email!,
+          name: profile?.name || session.user.email!.split('@')[0]
+        });
+        setIsAuthenticated(true);
       } else {
         setUser(null);
         setIsAuthenticated(false);
@@ -125,33 +72,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (authData.user) {
-      await updateUserState(authData.user.id, authData.user.email!);
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+
+      setUser({
+        id: authData.user.id,
+        email: authData.user.email!,
+        name: profile?.name || authData.user.email!.split('@')[0]
+      });
+      setIsAuthenticated(true);
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
-    const { data: { user: authUser }, error: authError } = await supabase.auth.signUp({
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: {
-          name: name
-        }
-      }
     });
 
     if (authError) {
       throw authError;
     }
 
-    if (authUser) {
-      // Create user profile in users table
+    if (authData.user) {
+      // Create user profile
       const { error: profileError } = await supabase
         .from('users')
         .insert([
           {
-            id: authUser.id,
-            email: authUser.email,
+            id: authData.user.id,
+            email: authData.user.email,
             name: name,
           }
         ]);
@@ -160,7 +113,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw profileError;
       }
 
-      await updateUserState(authUser.id, authUser.email!);
+      setUser({
+        id: authData.user.id,
+        email: authData.user.email!,
+        name: name
+      });
+      setIsAuthenticated(true);
     }
   };
 
@@ -183,7 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated,
       }}
     >
-      {!isLoading && children}
+      {children}
     </AuthContext.Provider>
   );
 };

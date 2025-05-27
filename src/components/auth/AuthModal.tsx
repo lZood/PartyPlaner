@@ -27,14 +27,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, pendi
     e.preventDefault();
     setError('');
     setIsLoading(true);
-    console.log('Starting auth process...');
 
     try {
       if (isLogin) {
-        console.log('Attempting login...');
         await login(email, password);
       } else {
-        console.log('Attempting registration...');
         await register(email, password, name);
       }
       
@@ -44,12 +41,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, pendi
       }
       
       onSuccess();
-      onClose();
     } catch (err) {
-      console.error('Auth error:', err);
       setError('Ha ocurrido un error. Por favor intenta de nuevo.');
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   if (!isOpen) return null;
