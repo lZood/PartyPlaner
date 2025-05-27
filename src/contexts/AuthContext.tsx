@@ -1,16 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { PostgrestError } from '@supabase/supabase-js';
 
 interface User {
   id: string;
   email: string;
   name: string;
-}
-
-interface AuthError {
-  message: string;
-  details?: string;
 }
 
 interface AuthContextType {
@@ -39,6 +33,7 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const updateUserState = async (userId: string, email: string) => {
     try {
@@ -48,7 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .single();
 
-      if (error && error.code === 'PGRST116') {
+      if (!profile) {
         // User profile doesn't exist yet, create it
         const { error: insertError } = await supabase
           .from('users')
@@ -56,16 +51,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             {
               id: userId,
               email: email,
-              name: email.split('@')[0]
+              name: email.split('@')[0],
             }
           ]);
 
         if (insertError) throw insertError;
 
+        // Fetch the newly created profile
+        const { data: newProfile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
         setUser({
           id: userId,
           email: email,
-          name: email.split('@')[0]
+          name: newProfile.name
         });
       } else if (error) {
         throw error;
@@ -84,85 +86,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logAuthError = (error: AuthError, action: string) => {
-    console.error(`Auth Error during ${action}:`, {
-      message: error.message,
-      details: error.details,
-      timestamp: new Date().toISOString()
-    });
-  };
-
-  const logAuthSuccess = (action: string, userId: string) => {
-    console.log(`Auth Success - ${action}:`, {
-      userId,
-      timestamp: new Date().toISOString()
-    });
-  };
-
-  const logAuthAction = (action: string, data?: any) => {
-    console.log(`Auth Action - ${action}:`, {
-      ...data,
-      timestamp: new Date().toISOString()
-    });
-  };
-
   useEffect(() => {
     // Check active session
-    logAuthAction('Checking session');
+    setIsLoading(true);
     
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         await updateUserState(session.user.id, session.user.email!);
       }
+      setIsLoading(false);
     };
 
     checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      logAuthAction('Auth state changed', { event });
-      
       if (session) {
-        logAuthAction('Session found', { userId: session.user.id });
         await updateUserState(session.user.id, session.user.email!);
-        logAuthSuccess('Session restored', session.user.id);
       } else {
-        logAuthAction('No session found');
         setUser(null);
         setIsAuthenticated(false);
       }
     });
 
     return () => {
-      logAuthAction('Cleaning up auth subscriptions');
       subscription.unsubscribe();
     };
   }, []);
 
   const login = async (email: string, password: string) => {
-    logAuthAction('Login attempt', { email });
-    
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (authError) {
-      logAuthError(authError, 'login');
       throw authError;
     }
 
     if (authData.user) {
-      logAuthAction('Login successful', { userId: authData.user.id });
-      
       await updateUserState(authData.user.id, authData.user.email!);
-      logAuthSuccess('Login completed', authData.user.id);
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
-    logAuthAction('Register attempt', { email });
-    
     const { data: { user: authUser }, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -174,13 +141,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (authError) {
-      logAuthError(authError, 'register');
       throw authError;
     }
 
     if (authUser) {
-      logAuthAction('Registration successful', { userId: authUser.id });
-      
       // Create user profile in users table
       const { error: profileError } = await supabase
         .from('users')
@@ -193,28 +157,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ]);
 
       if (profileError) {
-        logAuthError(profileError as AuthError, 'profile creation');
         throw profileError;
       }
 
-      logAuthAction('Profile created', { userId: authData.user.id });
-
       await updateUserState(authUser.id, authUser.email!);
-      logAuthSuccess('Registration completed', authData.user.id);
     }
   };
 
   const logout = async () => {
-    logAuthAction('Logout attempt');
-    
     const { error } = await supabase.auth.signOut();
     if (error) {
-      logAuthError(error, 'logout');
       throw error;
     }
     setUser(null);
     setIsAuthenticated(false);
-    logAuthSuccess('Logout completed', 'anonymous');
   };
 
   return (
@@ -227,7 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated,
       }}
     >
-      {children}
+      {!isLoading && children}
     </AuthContext.Provider>
   );
 };
