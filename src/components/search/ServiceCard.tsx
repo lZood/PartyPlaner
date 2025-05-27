@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Star, Heart } from 'lucide-react';
 import { Service } from '../../types';
