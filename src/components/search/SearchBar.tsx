@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Agregado useRef
 import { Search, Calendar, MapPin, Package } from 'lucide-react';
 import { categories } from '../../data/categories';
 import { useReservation } from '../../contexts/ReservationContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import LocationPicker from './LocationPicker';
 import DatePickerModal from './DatePickerModal';
-import CategoryPicker from './CategoryPicker'; 
+import CategoryPicker from './CategoryPicker';
 
-const useClickOutside = (ref: React.RefObject<HTMLDivElement>, handler: () => void) => {
+const useClickOutside = (ref: React.RefObject<HTMLElement>, handler: () => void) => { // Cambiado HTMLDivElement a HTMLElement
   useEffect(() => {
-    const listener = (event: MouseEvent) => {
+    const listener = (event: MouseEvent | TouchEvent) => { // Añadido TouchEvent
       if (!ref.current || ref.current.contains(event.target as Node)) {
         return;
       }
@@ -17,8 +17,10 @@ const useClickOutside = (ref: React.RefObject<HTMLDivElement>, handler: () => vo
     };
 
     document.addEventListener('mousedown', listener);
+    document.addEventListener('touchstart', listener); // Añadido para touch
     return () => {
       document.removeEventListener('mousedown', listener);
+      document.removeEventListener('touchstart', listener); // Añadido para touch
     };
   }, [ref, handler]);
 };
@@ -28,16 +30,21 @@ const SearchBar: React.FC = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [activeButton, setActiveButton] = useState<string | null>(null);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams(); // setSearchParams para actualizar URL
   const [location, setLocation] = useState(searchParams.get('location') || '');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(searchParams.get('category'));
-  const { selectedDate, setSelectedDate } = useReservation();
+  
+  // Usamos el contexto de reserva para la fecha, pero también un estado local si es necesario para la UI del SearchBar
+  const { selectedDate: contextSelectedDate, setSelectedDate: setContextSelectedDate } = useReservation();
+  const [localSelectedDate, setLocalSelectedDate] = useState<Date | null>(null);
+
+
   const navigate = useNavigate();
 
-  const locationRef = React.useRef<HTMLButtonElement>(null);
-  const dateRef = React.useRef<HTMLButtonElement>(null);
-  const categoryRef = React.useRef<HTMLButtonElement>(null);
-  const searchBarRef = React.useRef<HTMLDivElement>(null);
+  const locationRef = useRef<HTMLButtonElement>(null);
+  const dateRef = useRef<HTMLButtonElement>(null);
+  const categoryRef = useRef<HTMLButtonElement>(null);
+  const searchBarRef = useRef<HTMLDivElement>(null);
 
   const closeAllPickers = () => {
     setShowLocationPicker(false);
@@ -48,27 +55,48 @@ const SearchBar: React.FC = () => {
 
   useClickOutside(searchBarRef, closeAllPickers);
 
+  // Sincronizar el estado local de la fecha con el contexto y los parámetros de búsqueda
   useEffect(() => {
     const dateParam = searchParams.get('date');
     if (dateParam) {
-      setSelectedDate(new Date(dateParam));
+      const parsedDate = new Date(dateParam);
+      // Validar que la fecha sea correcta antes de asignarla
+      if (!isNaN(parsedDate.getTime())) {
+        setLocalSelectedDate(parsedDate);
+        // Opcionalmente, también podrías actualizar el contexto aquí si SearchBar es la fuente principal
+        // setContextSelectedDate(parsedDate); 
+      }
+    } else {
+      setLocalSelectedDate(contextSelectedDate); // Sincronizar desde el contexto si no hay parámetro
     }
-  }, [searchParams]);
+  }, [searchParams, contextSelectedDate]);
+
 
   const handleSearch = () => {
-    if (!location && !selectedCategory && !selectedDate) return;
+    // No es necesario verificar si todos están vacíos aquí, la página de resultados puede manejar eso.
+    const newSearchParams = new URLSearchParams();
+    if (location) newSearchParams.set('location', location);
+    if (selectedCategory) newSearchParams.set('category', selectedCategory);
+    if (localSelectedDate) newSearchParams.set('date', localSelectedDate.toISOString().split('T')[0]);
     
-    const searchParams = new URLSearchParams();
-    if (location) searchParams.set('location', location);
-    if (selectedCategory) searchParams.set('category', selectedCategory);
-    if (selectedDate) searchParams.set('date', selectedDate.toISOString().split('T')[0]);
-    
-    navigate(`/search?${searchParams.toString()}`);
+    // Actualizar el contexto de reserva si la fecha ha cambiado localmente
+    if (localSelectedDate !== contextSelectedDate) {
+        setContextSelectedDate(localSelectedDate);
+    }
+
+    navigate(`/search?${newSearchParams.toString()}`);
+    closeAllPickers();
   };
+  
+  // Actualizar el título del botón de fecha cuando localSelectedDate cambia
+  const dateButtonText = localSelectedDate 
+    ? localSelectedDate.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+    : 'Agregar fechas';
+
 
   return (
     <div ref={searchBarRef} className="relative container-custom max-w-4xl mx-auto">
-      <div className="w-full max-w-4xl mx-auto bg-white rounded-full shadow-lg flex items-center p-2">
+      <div className="w-full max-w-4xl mx-auto bg-white rounded-full shadow-lg flex items-center p-2 flex-wrap md:flex-nowrap">
         {/* Location */}
         <button
           ref={locationRef}
@@ -82,10 +110,10 @@ const SearchBar: React.FC = () => {
           }`}
         >
           <span className="text-xs font-medium text-gray-800">Destino</span>
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-gray-600 truncate"> {/* Añadido truncate */}
             {location || 'Buscar destinos'}
           </span>
-          <MapPin className="absolute left-0 top-1/2 -translate-y-1/2 text-primary-500" size={18} />
+          {/* Icono de MapPin, puedes decidir si lo necesitas aquí o dentro del LocationPicker */}
         </button>
 
         {/* Date */}
@@ -102,9 +130,9 @@ const SearchBar: React.FC = () => {
         >
           <span className="text-xs font-medium text-gray-800">Fecha</span>
           <span className="text-sm text-gray-600">
-            {selectedDate ? selectedDate.toLocaleDateString() : 'Agregar fechas'}
+            {dateButtonText} {/* Usar texto de botón de fecha actualizado */}
           </span>
-          <Calendar className="absolute left-0 top-1/2 -translate-y-1/2 text-primary-500" size={18} />
+          {/* Icono de Calendar */}
         </button>
 
         {/* Category */}
@@ -120,16 +148,16 @@ const SearchBar: React.FC = () => {
           }`}
         >
           <span className="text-xs font-medium text-gray-800">Tipo de servicio</span>
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-gray-600 truncate"> {/* Añadido truncate */}
             {selectedCategory ? categories.find(c => c.id === selectedCategory)?.name : 'Agrega un servicio'}
           </span>
-          <Package className="absolute left-0 top-1/2 -translate-y-1/2 text-primary-500" size={18} />
+          {/* Icono de Package */}
         </button>
 
         {/* Search Button */}
         <button
           onClick={handleSearch}
-          className="ml-2 bg-primary-500 text-white p-4 rounded-full hover:bg-primary-600 transition-colors"
+          className="ml-2 bg-primary-500 text-white p-3 md:p-4 rounded-full hover:bg-primary-600 transition-colors" // Ajustado padding para móvil
         >
           <Search size={20} />
         </button>
@@ -138,20 +166,19 @@ const SearchBar: React.FC = () => {
       {/* Pickers */}
       {showLocationPicker && (
         <div 
-          className="absolute z-50 w-[300px]"
+          className="absolute z-50 w-full sm:w-[300px] mt-2" // Ajustado ancho para móvil
           style={{
             top: '100%',
-            left: locationRef.current?.offsetLeft,
-            marginTop: '0.5rem'
+            left: locationRef.current?.offsetLeft ?? 0, // Default a 0 si es null
           }}
         >
           <LocationPicker
             onSelect={(value) => {
               setLocation(value);
-              setShowLocationPicker(false);
-              setActiveButton(null);
+              // setShowLocationPicker(false); // No cerrar automáticamente, el usuario podría querer refinar
+              // setActiveButton(null);
             }}
-            onClose={() => {
+            onClose={() => { // onClose se puede llamar desde el propio LocationPicker si tiene un botón de cerrar
               setShowLocationPicker(false);
               setActiveButton(null);
             }}
@@ -161,24 +188,31 @@ const SearchBar: React.FC = () => {
 
       {showDatePicker && (
         <div 
-          className="absolute z-50"
+          className="absolute z-50 mt-2" // Quitado posicionamiento izquierdo fijo
           style={{
             top: '100%',
-            left: '17%',
-            transform: 'translateX(17%)',
-            marginTop: '0.5rem'
+            // Centrar el DatePicker o posicionarlo mejor
+            left: '50%',
+            transform: 'translateX(-50%)',
+            minWidth: '300px', // Asegurar un ancho mínimo
           }}
         >
           <DatePickerModal
-            selectedDate={selectedDate}
+            selectedDate={localSelectedDate}
             onSelect={(date) => {
-              setSelectedDate(date);
-              setShowDatePicker(false);
-              setActiveButton(null);
+              setLocalSelectedDate(date); // Actualizar estado local
+              // No cerrar automáticamente, podría tener un botón de "Aplicar"
             }}
             onClose={() => {
               setShowDatePicker(false);
               setActiveButton(null);
+            }}
+            // Podrías pasar un onApply para cerrar y actualizar contexto
+            onApply={(date) => {
+                setLocalSelectedDate(date);
+                setContextSelectedDate(date); // Actualizar contexto al aplicar
+                setShowDatePicker(false);
+                setActiveButton(null);
             }}
           />
         </div>
@@ -186,19 +220,18 @@ const SearchBar: React.FC = () => {
 
       {showCategoryPicker && (
         <div 
-          className="absolute z-50 w-[300px]"
+          className="absolute z-50 w-full sm:w-[300px] mt-2" // Ajustado ancho para móvil
           style={{
             top: '100%',
-            left: categoryRef.current?.offsetLeft,
-            marginTop: '0.5rem'
+            left: categoryRef.current?.offsetLeft ?? 0,  // Default a 0 si es null
           }}
         >
           <CategoryPicker
             selectedCategory={selectedCategory}
             onSelect={(category) => {
               setSelectedCategory(category);
-              setShowCategoryPicker(false);
-              setActiveButton(null);
+              // setShowCategoryPicker(false); // No cerrar automáticamente
+              // setActiveButton(null);
             }}
             onClose={() => {
               setShowCategoryPicker(false);
