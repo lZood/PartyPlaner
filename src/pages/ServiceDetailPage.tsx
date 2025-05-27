@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { services as mockServicesData } from '../data/services'; // Import mock services
+import { Service as AppServiceType, Category as AppCategoryType, Subcategory as AppSubcategoryType } from '../types';
 import { Link, useParams } from 'react-router-dom';
 import Slider from 'react-slick';
 import { Star, Heart, CheckCircle, Truck, Calendar, Clock, MinusCircle, PlusCircle, Loader2 } from 'lucide-react';
@@ -8,7 +10,6 @@ import { categories as mockCategories } from '../data/categories'; // Keep for c
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import AuthModal from '../components/auth/AuthModal';
-import { Service as AppServiceType, Category as AppCategoryType, Subcategory as AppSubcategoryType } from '../types'; // Renamed to avoid conflict
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
