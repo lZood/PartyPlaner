@@ -735,7 +735,7 @@ const ProfilePage: React.FC = () => {
                         {/* Ensure the parent div of this block and other tags are closed */}
                       </div>
                     </div>
-                  ))
+                  )
                 )}
               </div>
             )}
