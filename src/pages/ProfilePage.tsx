@@ -15,13 +15,16 @@ interface ImageUpload {
 
 // Define AppUser aquí si no lo tienes globalmente o importado de AuthContext
 // Esta definición debe coincidir con la que uses en AuthContext (id, email, name)
-interface AppUser {
-  id: string;
-  email: string;
-  name: string;
-  // Añade aquí otros campos que puedan venir del perfil, como 'phone' o 'avatar_url' si los usas
-  phone?: string;
-  avatar_url?: string;
+if (setAuthUser && user) {
+  const updatedUserData: AppUser = { // Tipar explícitamente
+    id: user.id,
+    email: user.email, // El email no se modifica desde el formulario
+    name: formData.name,
+    phone: formData.phone,
+    // avatar_url: user.avatar_url, // Mantener si no se actualiza aquí
+  };
+  console.log('[ProfilePage] Calling setAuthUser with:', updatedUserData);
+  setAuthUser(updatedUserData);
 }
 
 
