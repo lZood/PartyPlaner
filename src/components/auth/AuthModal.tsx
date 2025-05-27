@@ -34,17 +34,17 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, pendi
         await register(email, password, name);
       }
       
-      // Add pending service to cart if exists
+      // Add pending service to cart if exists, only after successful login/registration
       if (pendingService && pendingQuantity) {
         addToCart(pendingService, pendingQuantity);
       }
       
-      onSuccess();
+      onSuccess(); // Call onSuccess only if login/register was successful
     } catch (err) {
       setError((err as Error).message || 'Ha ocurrido un error. Por favor intenta de nuevo.');
+    } finally { // Ensure isLoading is set to false whether success or error
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   if (!isOpen) return null;
