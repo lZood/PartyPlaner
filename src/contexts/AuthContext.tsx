@@ -159,6 +159,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthenticated(false);
   };
 
+  if (isLoading) {
+    return <div className="flex justify-center items-center min-h-screen">Loading app...</div>;
+  }
+
   return (
     <AuthContext.Provider
       value={{
