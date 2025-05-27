@@ -1,11 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { createClient, User as SupabaseAuthUser } from '@supabase/supabase-js'; // Importar User de supabase
+import { createClient, User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { toast } from 'react-toastify';
 
-interface AppUser { // Renombrar tu interfaz para evitar colisión
+// Definición de AppUser (asegúrate que sea consistente donde la uses)
+export interface AppUser {
   id: string;
   email: string;
   name: string;
+  phone?: string;
+  avatar_url?: string;
 }
 
 interface AuthContextType {
@@ -14,6 +17,10 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
+  // Expón setUser para que ProfilePage pueda actualizar el contexto.
+  // Considera si esto es la mejor práctica o si AuthContext debería tener una función updateUserProfile.
+  // Por ahora, lo exponemos según tu implementación actual en ProfilePage.
+  setUser: React.Dispatch<React.SetStateAction<AppUser | null>>;
 }
 
 const supabase = createClient(
@@ -36,7 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  console.log('[AuthContext] Component rendering/re-rendering. isLoading:', isLoading);
+  console.log('[AuthContext] Component rendering/re-rendering. isLoading:', isLoading, 'User:', user ? {...user} : null, 'IsAuthenticated:', isAuthenticated);
 
   useEffect(() => {
     console.log('[AuthContext] useEffect started. Setting up session listeners.');
@@ -44,6 +51,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const handleValidAuthUser = async (authUser: SupabaseAuthUser, source: string) => {
       console.log(`[AuthContext] ${source}: authUser is valid. ID: ${authUser.id}. Fetching profile from "users" table.`);
+      if (!authUser.email) {
+        console.warn(`[AuthContext] ${source}: authUser does not have an email. Cannot proceed to fetch profile.`, { authUser });
+        if (isMounted) {
+          setUser(null); // O manejar de otra forma un usuario sin email
+          setIsAuthenticated(false); // Si el email es mandatorio para tu app user
+        }
+        return;
+      }
+
       try {
         const { data: profile, error: profileError } = await supabase
           .from('users')
@@ -57,35 +73,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
+        const newAppUserData: AppUser = {
+          id: authUser.id,
+          email: authUser.email, // authUser.email ya fue verificado arriba
+          name: profile?.name || authUser.email.split('@')[0],
+          phone: profile?.phone || undefined,
+          avatar_url: profile?.avatar_url || undefined,
+        };
+
         if (profileError) {
-          console.error(`[AuthContext] ${source}: Error fetching profile:`, profileError);
-          if (isMounted && authUser.email) { // Asegurar que email existe
-            const defaultUser: AppUser = {
-              id: authUser.id,
-              email: authUser.email,
-              name: authUser.email.split('@')[0]
-            };
-            console.log(`[AuthContext] ${source}: Setting user to default due to profileError.`, defaultUser);
-            setUser(defaultUser);
-            setIsAuthenticated(true);
-          } else if (isMounted) {
-            console.warn(`[AuthContext] ${source}: Cannot set default user as authUser.email is missing.`);
-            setUser(null);
-            setIsAuthenticated(false);
-          }
-        } else if (isMounted && authUser.email) { // Asegurar que email existe
-          const appUserData: AppUser = {
+          console.error(`[AuthContext] ${source}: Error fetching profile from 'users' table:`, profileError);
+          // Aun si hay error al obtener el perfil de 'users', el usuario está autenticado en Supabase Auth.
+          // Establecemos un usuario por defecto con los datos de Supabase Auth.
+          // La interfaz AppUser debe poder manejar un `name` por defecto y `phone`/`avatar_url` opcionales.
+          const defaultAppUser: AppUser = {
             id: authUser.id,
             email: authUser.email,
-            name: profile?.name || authUser.email.split('@')[0]
+            name: authUser.email.split('@')[0],
           };
-          console.log(`[AuthContext] ${source}: Setting user with profile data.`, appUserData);
-          setUser(appUserData);
-          setIsAuthenticated(true);
-        } else if (isMounted) {
-            console.warn(`[AuthContext] ${source}: Cannot set user as authUser.email is missing.`);
-            setUser(null);
-            setIsAuthenticated(false);
+          console.log(`[AuthContext] ${source}: Setting user to default (from auth) due to profileError.`, defaultAppUser);
+          setUser(defaultAppUser);
+          setIsAuthenticated(true); // El usuario está autenticado, aunque el perfil de 'users' falle
+        } else {
+          let userChanged = false;
+          if (!user) {
+            userChanged = true;
+          } else {
+            if (user.id !== newAppUserData.id) userChanged = true;
+            if (user.name !== newAppUserData.name) userChanged = true;
+            if (user.email !== newAppUserData.email) userChanged = true;
+            if (user.phone !== newAppUserData.phone) userChanged = true;
+            if (user.avatar_url !== newAppUserData.avatar_url) userChanged = true;
+          }
+
+          if (userChanged) {
+            console.log(`[AuthContext] ${source}: User data changed or was null. Setting user.`, newAppUserData);
+            setUser(newAppUserData);
+          } else {
+            console.log(`[AuthContext] ${source}: User data is the same. Not calling setUser from ${source}.`);
+          }
+          // Asegurar que isAuthenticated sea true si llegamos aquí con un authUser válido
+          if(!isAuthenticated) setIsAuthenticated(true);
         }
       } catch (fetchError) {
         console.error(`[AuthContext] ${source}: EXCEPTION during profile fetch:`, fetchError);
@@ -122,12 +150,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (authUserError || !authUser) {
             console.warn('[AuthContext] fetchInitialSession: User from session is not valid or error fetching authUser. Clearing session state.', { authUserError, authUser });
             if (isMounted) { setUser(null); setIsAuthenticated(false); }
-            // Consider await supabase.auth.signOut(); if this state persists
-          } else if (authUser.email) { // Check if email exists
-            await handleValidAuthUser(authUser, 'fetchInitialSession');
           } else {
-            console.warn('[AuthContext] fetchInitialSession: authUser retrieved but email is missing.', { authUser });
-            if (isMounted) { setUser(null); setIsAuthenticated(false); }
+            await handleValidAuthUser(authUser, 'fetchInitialSession');
           }
         } else {
           console.log('[AuthContext] fetchInitialSession: No session or no session.user found.');
@@ -154,19 +178,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (session && session.user) {
         console.log('[AuthContext] onAuthStateChange: Session object found. Validating user with auth.getUser() for ID:', session.user.id);
-        const { data: { user: authUser }, error: authUserError } = await supabase.auth.getUser(); // Validate the user again
+        // No es estrictamente necesario llamar a getUser() aquí si confías en el 'session' del evento,
+        // pero puede ser una doble verificación. Si es problemático, puedes usar session.user directamente.
+        const { data: { user: authUserFromEvent }, error: authUserError } = await supabase.auth.getUser();
 
         if (!isMounted) return;
 
-        if (authUserError || !authUser) {
-          console.warn('[AuthContext] onAuthStateChange: User from event session is not valid or error fetching authUser. Clearing session state.', { authUserError, authUser });
+        const authUserToProcess = authUserError || !authUserFromEvent ? session.user : authUserFromEvent;
+
+
+        if (authUserError || !authUserToProcess) {
+          console.warn('[AuthContext] onAuthStateChange: User from event session is not valid or error fetching authUser. Clearing session state.', { authUserError, authUser: authUserToProcess });
           if (isMounted) { setUser(null); setIsAuthenticated(false); }
-          // Consider await supabase.auth.signOut();
-        } else if (authUser.email) { // Check if email exists
-          await handleValidAuthUser(authUser, 'onAuthStateChange');
         } else {
-          console.warn('[AuthContext] onAuthStateChange: authUser retrieved but email is missing.', { authUser });
-          if (isMounted) { setUser(null); setIsAuthenticated(false); }
+          await handleValidAuthUser(authUserToProcess, 'onAuthStateChange');
         }
       } else {
         console.log('[AuthContext] onAuthStateChange: No session or no session.user.');
@@ -180,10 +205,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, []); // user e isAuthenticated no deberían estar aquí para evitar bucles de re-suscripción.
 
   const login = async (email: string, password: string) => {
-    // ... (login function remains largely the same, ensure it uses AppUser for setUser)
     console.log('[AuthContext] login function called for email:', email);
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
@@ -197,35 +221,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw authError;
     }
 
-    if (authData.user && authData.user.email) {
-      console.log('[AuthContext] login: authData.user exists. Fetching profile.');
-      const { data: profile, error: profileError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authData.user.id)
-        .single();
-      console.log('[AuthContext] login: Profile fetched.', { profile, profileError });
-
-      if (profileError) {
-          console.error('[AuthContext] login: Error fetching profile after login:', profileError);
-      }
-
-      const appUserData: AppUser = { // Use AppUser
-        id: authData.user.id,
-        email: authData.user.email,
-        name: profile?.name || authData.user.email.split('@')[0]
-      };
-      console.log('[AuthContext] login: Setting user.', appUserData);
-      setUser(appUserData);
-      setIsAuthenticated(true);
-      toast.success(`¡Bienvenido de nuevo!`);
+    // onAuthStateChange se encargará de actualizar el usuario y isAuthenticated
+    if (authData.user) {
+        toast.success(`¡Bienvenido de nuevo!`);
     } else {
-        console.warn('[AuthContext] login: authData.user is null/undefined or email is missing.', {user: authData.user});
+        console.warn('[AuthContext] login: authData.user is null/undefined.');
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
-    // ... (register function remains largely the same, ensure it uses AppUser for setUser)
     console.log('[AuthContext] register function called for email:', email, 'name:', name);
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -240,7 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (authData.user && authData.user.email) {
-      console.log('[AuthContext] register: authData.user exists. Creating profile.');
+      console.log('[AuthContext] register: authData.user exists. Creating profile in "users" table.');
       const { error: profileError } = await supabase
         .from('users')
         .insert([
@@ -248,24 +252,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: authData.user.id,
             email: authData.user.email,
             name: name,
+            // phone: '', // Podrías inicializar phone aquí si es necesario
           }
         ]);
 
       if (profileError) {
         console.error('[AuthContext] register: profileError creating user in "users" table:', profileError);
+        // Si falla la creación del perfil público, el usuario de auth existe pero el perfil no.
+        // Deberías decidir cómo manejar esto. ¿Eliminar el usuario de auth? ¿Reintentar?
+        // Por ahora, lanzaremos el error, pero onAuthStateChange podría establecer un usuario por defecto.
         throw profileError;
       }
       console.log('[AuthContext] register: Profile created in "users" table.');
-
-      const appUserData: AppUser = { // Use AppUser
-        id: authData.user.id,
-        email: authData.user.email,
-        name: name
-      };
-      console.log('[AuthContext] register: Setting user.', appUserData);
-      setUser(appUserData);
-      setIsAuthenticated(true);
-      toast.success(`¡Bienvenido ${name}!`);
+      // onAuthStateChange debería recoger este nuevo usuario y perfil.
+      toast.success(`¡Bienvenido ${name}! Tu cuenta ha sido creada.`);
     } else {
         console.warn('[AuthContext] register: authData.user is null/undefined or email is missing.', { user: authData.user });
     }
@@ -296,6 +296,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         isAuthenticated,
+        setUser, // Exponer setUser
       }}
     >
       {children}
