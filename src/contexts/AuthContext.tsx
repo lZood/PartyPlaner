@@ -37,25 +37,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    let isMounted = true;
+
+    const fetchInitialSession = async () => {
       try {
-        if (session) {
+        // Guard against setting state if unmounted
+        if (!isMounted) return; 
+        
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (!isMounted) return; // Check again after await
+
+        if (sessionError) {
+          console.error("Error getting initial session:", sessionError);
+          if (isMounted) {
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+        } else if (session) {
           const { data: profile, error: profileError } = await supabase
             .from('users')
             .select('*')
             .eq('id', session.user.id)
             .single();
 
+          if (!isMounted) return; // Check again
+
           if (profileError) {
-            console.error('Error fetching profile:', profileError);
-            // Set user based on session, default name if profile fails
-            setUser({
-              id: session.user.id,
-              email: session.user.email!,
-              name: session.user.email!.split('@')[0] 
-            });
-            setIsAuthenticated(true);
-          } else {
+            console.error('Error fetching profile for initial session:', profileError);
+            if (isMounted) {
+              setUser({
+                id: session.user.id,
+                email: session.user.email!,
+                name: session.user.email!.split('@')[0] // Default name
+              });
+              setIsAuthenticated(true);
+            }
+          } else if (isMounted) {
             setUser({
               id: session.user.id,
               email: session.user.email!,
@@ -63,23 +81,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
             setIsAuthenticated(true);
           }
-        } else {
+        } else { // No session
+          if (isMounted) {
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+        }
+      } catch (e) {
+        console.error("Exception in fetchInitialSession:", e);
+        if (isMounted) {
           setUser(null);
           setIsAuthenticated(false);
         }
-      } catch (error) {
-        console.error("Error processing auth state change:", error);
-        setUser(null);
-        setIsAuthenticated(false);
       } finally {
-        setIsLoading(false); // Ensure loading is always stopped
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
+    };
+
+    fetchInitialSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+
+      if (session) {
+        const { data: profile, error: profileError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!isMounted) return; // Check again
+
+        if (profileError) {
+          console.error('Error fetching profile onAuthStateChange:', profileError);
+          if (isMounted) {
+            setUser({
+              id: session.user.id,
+              email: session.user.email!,
+              name: session.user.email!.split('@')[0] // Default name
+            });
+            setIsAuthenticated(true);
+          }
+        } else if (isMounted) {
+          setUser({
+            id: session.user.id,
+            email: session.user.email!,
+            name: profile?.name || session.user.email!.split('@')[0]
+          });
+          setIsAuthenticated(true);
+        }
+      } else { // No session
+        if (isMounted) {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      }
+      // IMPORTANT: No setIsLoading(false) here in onAuthStateChange
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Empty dependency array ensures this runs once on mount and cleans up on unmount
 
   const login = async (email: string, password: string) => {
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
