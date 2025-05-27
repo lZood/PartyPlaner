@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { User, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import AuthModal from '../auth/AuthModal';
@@ -13,6 +13,7 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, logout, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -25,13 +26,20 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setIsOpen(false);
+      navigate('/');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
     setIsOpen(false);
   };
 
   const handleAuthSuccess = () => {
     setShowAuthModal(false);
+    setIsOpen(false);
   };
 
   return (
@@ -63,6 +71,7 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
           <button
             onClick={handleLogout}
             className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-100"
+            disabled={isLoading}
           >
             <LogOut size={16} className="mr-2" />
             Cerrar Sesión
