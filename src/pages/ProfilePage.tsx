@@ -2,13 +2,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Plus, Package, Star, Edit, Trash2, X, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
-// Asegúrate de que refreshUserProfile esté disponible en el hook useAuth
-import { useAuth } from '../contexts/AuthContext'; //
-import { categories } from '../data/categories'; //
-import { Service } from '../types'; //
-import { createClient } from '@supabase/supabase-js'; //
+// Asegúrate de que refreshUserProfile esté disponible en el hook useAuth si lo agregaste
+import { useAuth } from '../contexts/AuthContext';
+import { categories } from '../data/categories';
+import { Service } from '../types';
+import { createClient } from '@supabase/supabase-js';
 import { toast } from 'react-toastify';
-import { AppUser } from '../contexts/AuthContext'; //
+import { AppUser } from '../contexts/AuthContext';
 
 interface ImageUpload {
   file: File;
@@ -60,7 +60,7 @@ const ProfilePage: React.FC = () => {
         avatar_url: user.avatar_url || '',
       });
     }
-  }, [user]); //
+  }, [user]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>, isMain: boolean = false) => {
     const files = e.target.files;
@@ -79,7 +79,7 @@ const ProfilePage: React.FC = () => {
           setMainImage(imageUpload);
         } else {
           setGalleryImages(prev => {
-            if (prev.length >= 5) { //
+            if (prev.length >= 5) {
               toast.warn('Máximo 5 imágenes en la galería');
               return prev;
             }
@@ -106,13 +106,13 @@ const ProfilePage: React.FC = () => {
       return; 
     }
     if (user?.id){
-        document.title = 'Mi Perfil | CABETG Party Planner'; //
+        document.title = 'Mi Perfil | CABETG Party Planner';
         const fetchServices = async () => {
           console.log(`[ProfilePage] Fetching services for provider_id: ${user.id}`);
           const { data: servicesData, error } = await supabase
             .from('services')
             .select('*')
-            .eq('provider_id', user.id); //
+            .eq('provider_id', user.id);
 
           if (error) {
             console.error('[ProfilePage] Error fetching services:', error);
@@ -165,13 +165,11 @@ const ProfilePage: React.FC = () => {
         toast.error(`Error al actualizar el perfil: ${error.message}`);
       } else {
         toast.success('Perfil actualizado con éxito!');
-        console.log('[ProfilePage] Profile updated successfully in Supabase. Attempting to refresh user profile from context...');
-        
-        if (refreshUserProfile) {
+        console.log('[ProfilePage] Profile updated successfully in Supabase. Refreshing user profile from context...');
+        // Llamar a refreshUserProfile para forzar la actualización del contexto
+        if (refreshUserProfile) { // Verifica si la función existe
             await refreshUserProfile();
-            console.log('[ProfilePage] User profile refresh initiated via context.');
-        } else {
-            console.warn('[ProfilePage] refreshUserProfile function is not available in AuthContext.');
+            console.log('[ProfilePage] User profile refreshed from context.');
         }
       }
     } catch (errorCatch) { 
@@ -185,93 +183,93 @@ const ProfilePage: React.FC = () => {
   
   const handleServiceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !user.id || !user.name || !user.email) { //
-        toast.error("Debes estar autenticado y tu perfil debe estar completo para crear un servicio."); //
+    if (!user || !user.id || !user.name || !user.email) {
+        toast.error("Debes estar autenticado y tu perfil debe estar completo para crear un servicio.");
         return;
     }
-    setIsSubmittingService(true); //
+    setIsSubmittingService(true);
     try {
-      if (!mainImage) { //
-        toast.error('Por favor selecciona una imagen principal'); //
-        setIsSubmittingService(false); //
+      if (!mainImage) {
+        toast.error('Por favor selecciona una imagen principal');
+        setIsSubmittingService(false);
         return;
       }
-      const mainImageFileName = `${user.id}/${Date.now()}_${mainImage.file.name.replace(/\s/g, '_')}`; //
-      const { data: mainUploadData, error: mainImageError } = await supabase.storage //
-        .from('service-images') //
-        .upload(mainImageFileName, mainImage.file); //
-      if (mainImageError) throw mainImageError; //
-      const mainImageStoragePath = mainUploadData.path; //
+      const mainImageFileName = `<span class="math-inline">\{user\.id\}/</span>{Date.now()}_${mainImage.file.name.replace(/\s/g, '_')}`;
+      const { data: mainUploadData, error: mainImageError } = await supabase.storage
+        .from('service-images')
+        .upload(mainImageFileName, mainImage.file);
+      if (mainImageError) throw mainImageError;
+      const mainImageStoragePath = mainUploadData.path;
 
-      const galleryStoragePaths: string[] = []; //
-      for (const image of galleryImages) { //
-        const galleryImageFileName = `${user.id}/${Date.now()}_${image.file.name.replace(/\s/g, '_')}`; //
-        const { data: galleryUploadData, error: galleryError } = await supabase.storage //
-          .from('service-images') //
-          .upload(galleryImageFileName, image.file); //
-        if (galleryError) throw galleryError; //
-        galleryStoragePaths.push(galleryUploadData.path); //
+      const galleryStoragePaths: string[] = [];
+      for (const image of galleryImages) {
+        const galleryImageFileName = `<span class="math-inline">\{user\.id\}/</span>{Date.now()}_${image.file.name.replace(/\s/g, '_')}`;
+        const { data: galleryUploadData, error: galleryError } = await supabase.storage
+          .from('service-images')
+          .upload(galleryImageFileName, image.file);
+        if (galleryError) throw galleryError;
+        galleryStoragePaths.push(galleryUploadData.path);
       }
 
-      const serviceToInsert = { //
-        name: serviceFormData.name, //
-        category_id: serviceFormData.categoryId, //
-        subcategory_id: serviceFormData.subcategoryId, //
-        short_description: serviceFormData.shortDescription, //
-        description: serviceFormData.description, //
-        price: serviceFormData.price ? parseFloat(serviceFormData.price) : null, //
-        provider_id: user.id, //
-        provider_name: user.name, //
-        provider_email: user.email, //
-        features: serviceFormData.features.filter(f => f.trim() !== ''), //
-        is_approved: false, rating: 0, review_count: 0 //
+      const serviceToInsert = {
+        name: serviceFormData.name,
+        category_id: serviceFormData.categoryId,
+        subcategory_id: serviceFormData.subcategoryId,
+        short_description: serviceFormData.shortDescription,
+        description: serviceFormData.description,
+        price: serviceFormData.price ? parseFloat(serviceFormData.price) : null,
+        provider_id: user.id,
+        provider_name: user.name,
+        provider_email: user.email,
+        features: serviceFormData.features.filter(f => f.trim() !== ''),
+        is_approved: false, rating: 0, review_count: 0
       };
-      const { data: newService, error: serviceError } = await supabase //
-        .from('services') //
-        .insert(serviceToInsert).select().single(); //
-      if (serviceError) throw serviceError; //
-      if (!newService) throw new Error("No se pudo obtener el servicio creado."); //
+      const { data: newService, error: serviceError } = await supabase
+        .from('services')
+        .insert(serviceToInsert).select().single();
+      if (serviceError) throw serviceError;
+      if (!newService) throw new Error("No se pudo obtener el servicio creado.");
 
-      const serviceImagesToInsert = [{ //
-        service_id: newService.id, storage_path: mainImageStoragePath, //
-        is_main_image: true, position: 0 //
+      const serviceImagesToInsert = [{
+        service_id: newService.id, storage_path: mainImageStoragePath,
+        is_main_image: true, position: 0
       }];
-      galleryStoragePaths.forEach((path, index) => { //
-        serviceImagesToInsert.push({ //
-          service_id: newService.id, storage_path: path, //
-          is_main_image: false, position: index + 1 //
+      galleryStoragePaths.forEach((path, index) => {
+        serviceImagesToInsert.push({
+          service_id: newService.id, storage_path: path,
+          is_main_image: false, position: index + 1
         });
       });
-      const { error: serviceImagesError } = await supabase.from('service_images').insert(serviceImagesToInsert); //
-      if (serviceImagesError) throw serviceImagesError; //
+      const { error: serviceImagesError } = await supabase.from('service_images').insert(serviceImagesToInsert);
+      if (serviceImagesError) throw serviceImagesError;
 
-      toast.success('Servicio publicado con éxito! Pendiente de aprobación.'); //
-      setShowServiceForm(false); setMainImage(null); setGalleryImages([]); //
-      setServiceFormData({ //
-        name: '', categoryId: '', subcategoryId: '', shortDescription: '', //
-        description: '', price: '', features: [''], //
+      toast.success('Servicio publicado con éxito! Pendiente de aprobación.');
+      setShowServiceForm(false); setMainImage(null); setGalleryImages([]);
+      setServiceFormData({
+        name: '', categoryId: '', subcategoryId: '', shortDescription: '',
+        description: '', price: '', features: [''],
       });
-      if (user?.id) { //
-            const { data: updatedServicesData, error: fetchError } = await supabase //
-            .from('services').select('*').eq('provider_id', user.id); //
-            if (fetchError) console.error('[ProfilePage] Error fetching updated services after creation:', fetchError); //
-            else if (updatedServicesData) setMyServices(updatedServicesData as Service[]); //
+      if (user?.id) {
+            const { data: updatedServicesData, error: fetchError } = await supabase
+            .from('services').select('*').eq('provider_id', user.id);
+            if (fetchError) console.error('[ProfilePage] Error fetching updated services after creation:', fetchError);
+            else if (updatedServicesData) setMyServices(updatedServicesData as Service[]);
       }
     } catch (error: any) {
       console.error('[ProfilePage] Error creating service:', error);
       toast.error(`Error al crear el servicio: ${error.message || 'Error desconocido'}`);
     } finally {
-      setIsSubmittingService(false); //
+      setIsSubmittingService(false);
     }
   };
 
   const handleAddFeature = () => {
-    setServiceFormData(prev => ({ ...prev, features: [...prev.features, ''] })); //
+    setServiceFormData(prev => ({ ...prev, features: [...prev.features, ''] }));
   };
   
-  if (!isAuthenticated || !user) { //
-    console.log('[ProfilePage] Rendering loading/redirect: isAuthenticated:', isAuthenticated, 'user:', user); //
-    return <div className="flex justify-center items-center min-h-screen">Cargando perfil...</div>; //
+  if (!isAuthenticated || !user) {
+    console.log('[ProfilePage] Rendering loading/redirect: isAuthenticated:', isAuthenticated, 'user:', user);
+    return <div className="flex justify-center items-center min-h-screen">Cargando perfil...</div>;
   }
 
   return (
@@ -306,9 +304,9 @@ const ProfilePage: React.FC = () => {
         {activeTab === 'profile' ? (
           <div className="bg-white rounded-xl shadow-md p-6 md:p-8">
           <div className="flex items-center mb-8">
-            <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center overflow-hidden"> {/* Added overflow-hidden */}
+            <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center">
               {formData.avatar_url ? (
-                <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                <img src={formData.avatar_url} alt="Avatar" className="w-full h-full rounded-full object-cover" />
               ) : (
                 <User size={40} className="text-primary-500" />
               )}
@@ -713,6 +711,10 @@ const ProfilePage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {myServices.map(service => {
+                  // Aquí asumimos que service.imageUrl ya es la URL completa o que tienes una lógica para construirla
+                  // Por ejemplo, si service.imageUrl es solo el path de Supabase Storage:
+                  // const displayImageUrl = service.imageUrl ? `<span class="math-inline">\{import\.meta\.env\.VITE\_SUPABASE\_URL\}/storage/v1/object/public/</span>{service.imageUrl}` : 'https://via.placeholder.com/300x200?text=Sin+Imagen';
+                  // Pero si service.imageUrl ya está bien (como en tus datos mock), puedes usarlo directamente.
                   const displayImageUrl = service.imageUrl || 'https://via.placeholder.com/300x200?text=Sin+Imagen';
                   
                   return (
@@ -726,36 +728,4 @@ const ProfilePage: React.FC = () => {
                         <div className="p-6">
                         <h3 className="text-xl font-semibold mb-2">{service.name}</h3>
                         <p className="text-gray-600 text-sm mb-4 line-clamp-2">{service.shortDescription}</p>
-                        <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center">
-                            <Star className="text-warning-500 fill-current" size={18} />
-                            <span className="ml-1 font-medium">{service.rating || 0}</span>
-                            <span className="mx-1 text-gray-400">·</span>
-                            <span className="text-gray-600">({service.reviewCount || 0} reseñas)</span>
-                            </div>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ (service as any).is_approved ? 'bg-success-100 text-success-700' : 'bg-warning-100 text-warning-700'}`}>
-                                {(service as any).is_approved ? 'Aprobado' : 'Pendiente'}
-                            </span>
-                        </div>
-                        <div className="mt-4 flex space-x-2">
-                            <button className="p-2 text-gray-500 hover:text-primary-500 bg-gray-100 hover:bg-gray-200 rounded-md" aria-label="Editar servicio">
-                                <Edit size={18} />
-                            </button>
-                            <button className="p-2 text-gray-500 hover:text-error-500 bg-gray-100 hover:bg-gray-200 rounded-md" aria-label="Eliminar servicio">
-                                <Trash2 size={18} />
-                            </button>
-                        </div>
-                        </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default ProfilePage;
+                        <div className="
