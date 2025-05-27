@@ -1,14 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { createClient, User as SupabaseAuthUser, Session } from '@supabase/supabase-js';
-import { toast } from 'react-toastify';
+// src/contexts/AuthContext.tsx
 
-export interface AppUser {
-  id: string;
-  email: string;
-  name: string;
-  phone?: string;
-  avatar_url?: string;
-}
+// ... (importaciones y AppUser interface)
 
 interface AuthContextType {
   user: AppUser | null;
@@ -17,23 +9,11 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   setUser: React.Dispatch<React.SetStateAction<AppUser | null>>;
-  refreshUserProfile: () => Promise<void>; // Nueva función
+  // NUEVA FUNCIÓN para refrescar el usuario manualmente si es necesario
+  refreshUserProfile: () => Promise<void>;
 }
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL!,
-  import.meta.env.VITE_SUPABASE_ANON_KEY!
-);
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+// ... (supabase client y AuthContext)
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AppUser | null>(null);
@@ -41,7 +21,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const initialLoadDone = useRef(false);
 
-  console.log(`[AuthContext] Component rendering. isLoading: ${isLoading}, isAuthenticated: ${isAuthenticated}, User: ${user ? user.id : null}`);
+  // ... (console.log)
 
   const fetchAndSetUserProfile = async (authUser: SupabaseAuthUser, source: string): Promise<AppUser | null> => {
     if (!authUser.email) {
@@ -58,6 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (profileError) {
         console.error(`[AuthContext] fetchAndSetUserProfile (${source}): Error fetching profile:`, profileError);
+        // Devolver un usuario por defecto basado en authUser si el perfil no se encuentra o hay error
         return {
           id: authUser.id,
           email: authUser.email,
@@ -76,63 +57,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (fetchError) {
       console.error(`[AuthContext] fetchAndSetUserProfile (${source}): EXCEPTION during profile fetch:`, fetchError);
-      return null;
+      return null; // O un usuario por defecto
     }
   };
 
-  const processUserSession = async (authUser: SupabaseAuthUser | null, source: string) => {
-    // Para isMounted, se asume que el useEffect que llama a esto maneja su propio flag isMounted
-    let isMounted = true; // Simplificación para este fragmento. Considera el scope real.
 
-    if (!isMounted) {
-        console.log(`[AuthContext] processUserSession (${source}): Component unmounted. Aborting.`);
-        return;
-    }
+  const processUserSession = async (authUser: SupabaseAuthUser | null, source: string) => {
+    let isMounted = true; // Asumimos que esto se maneja en el useEffect que llama a esta función si es necesario.
+                        // Para simplificar, lo omito aquí pero considera el scope de `isMounted`.
 
     if (authUser) {
       const appUser = await fetchAndSetUserProfile(authUser, source);
-      if (isMounted) { // Verificar de nuevo por si la operación asíncrona tardó
-        if (appUser) {
-          setUser(appUser);
-          setIsAuthenticated(true);
-          console.log(`[AuthContext] processUserSession (${source}): User state updated.`, appUser);
-        } else {
-          setUser(null);
-          setIsAuthenticated(false);
-          console.log(`[AuthContext] processUserSession (${source}): Failed to fetch profile, user state cleared.`);
-        }
-      }
-    } else {
-      if (isMounted) {
-        console.log(`[AuthContext] processUserSession (${source}): No authUser provided. Clearing user state.`);
+      if (appUser) {
+        setUser(appUser);
+        setIsAuthenticated(true);
+        console.log(`[AuthContext] processUserSession (${source}): User state updated.`, appUser);
+      } else {
         setUser(null);
         setIsAuthenticated(false);
+        console.log(`[AuthContext] processUserSession (${source}): Failed to fetch profile, user state cleared.`);
       }
+    } else {
+      console.log(`[AuthContext] processUserSession (${source}): No authUser provided. Clearing user state.`);
+      setUser(null);
+      setIsAuthenticated(false);
     }
 
-    if (isMounted && !initialLoadDone.current) {
+    if (!initialLoadDone.current) {
       console.log(`[AuthContext] processUserSession (${source}): Initial load sequence complete. Setting isLoading to false.`);
       setIsLoading(false);
       initialLoadDone.current = true;
     }
   };
   
+  // Función para refrescar el perfil del usuario manualmente
   const refreshUserProfile = async () => {
     console.log('[AuthContext] refreshUserProfile called.');
     const { data: { user: authUser }, error } = await supabase.auth.getUser();
 
     if (error) {
         console.error('[AuthContext] refreshUserProfile: Error getting current auth user:', error);
+        // Podrías querer limpiar el usuario si hay un error significativo aquí
         setUser(null);
         setIsAuthenticated(false);
         return;
     }
 
-    // Llama a processUserSession con el authUser actual (puede ser null si no hay sesión)
-    // processUserSession ya maneja el caso de authUser nulo.
-    await processUserSession(authUser, 'refreshUserProfile');
-    console.log('[AuthContext] refreshUserProfile: User profile processing complete.');
+    if (authUser) {
+        console.log('[AuthContext] refreshUserProfile: Auth user found, processing session.');
+        await processUserSession(authUser, 'refreshUserProfile');
+    } else {
+        console.log('[AuthContext] refreshUserProfile: No auth user found, clearing session.');
+        // Esto ya lo hace processUserSession si authUser es null, pero para ser explícito:
+        setUser(null);
+        setIsAuthenticated(false);
+    }
   };
+
 
   useEffect(() => {
     let isMounted = true;
@@ -145,25 +126,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       if (sessionError) {
         console.error("[AuthContext] useEffect (getSession): Error getting initial session:", sessionError);
-        await processUserSession(null, 'getSessionError');
+        processUserSession(null, 'getSessionError');
       } else if (session && session.user) {
         console.log('[AuthContext] useEffect (getSession): Session found. User ID:', session.user.id);
-        const { data: { user: liveUser }, error: getUserError } = await supabase.auth.getUser();
+        const { data: { user: liveUser }, error: getUserError } = await supabase.auth.getUser(); //
         if (!isMounted) return;
         if (getUserError || !liveUser) {
             console.warn('[AuthContext] useEffect (getSession): User from session.user not confirmed by getUser. Using session.user or clearing.', { getUserError, liveUser, sessionUser: session.user });
-            await processUserSession(session.user, 'getSession-liveUserErrorOrFallback');
+             processUserSession(session.user, 'getSession-liveUserErrorOrFallback');
         } else {
-            await processUserSession(liveUser, 'getSession-liveUserSuccess');
+            processUserSession(liveUser, 'getSession-liveUserSuccess');
         }
       } else {
         console.log('[AuthContext] useEffect (getSession): No active session found.');
-        await processUserSession(null, 'getSessionNoSession');
+        processUserSession(null, 'getSessionNoSession');
       }
-    }).catch(async error => {
+    }).catch(error => {
         if (!isMounted) return;
         console.error("[AuthContext] useEffect (getSession): Promise rejection:", error);
-        await processUserSession(null, 'getSessionPromiseCatch');
+        processUserSession(null, 'getSessionPromiseCatch');
     });
 
     console.log('[AuthContext] useEffect: Setting up onAuthStateChange listener.');
@@ -187,76 +168,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  // ... (funciones login, register, logout sin cambios significativos, solo asegurar que manejen isLoading)
+
   const login = async (email: string, password: string) => {
-    setIsLoading(true); 
+    // setIsLoading(true); // Ya está en la versión anterior
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ //
         email,
         password,
       });
       if (authError) {
-        console.error('[AuthContext] login: authError:', authError);
-        toast.error(authError.message.includes('Invalid login credentials') ? 'Correo o contraseña incorrectos' : authError.message);
-        setIsLoading(false); 
+        console.error('[AuthContext] login: authError:', authError); //
+        toast.error(authError.message.includes('Invalid login credentials') ? 'Correo o contraseña incorrectos' : authError.message); //
+        // setIsLoading(false); // processUserSession lo hará
         throw authError; 
       }
-      // onAuthStateChange (y por lo tanto processUserSession) se encargará de setIsLoading(false)
-      if (authData.user) {
-          toast.success(`¡Bienvenido de nuevo!`);
+      if (authData.user) { //
+          toast.success(`¡Bienvenido de nuevo!`); //
       }
     } catch (error) {
-      setIsLoading(false); 
+      // setIsLoading(false); // processUserSession lo hará si falla y authUser es null
       throw error;
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
-    setIsLoading(true); 
+    // setIsLoading(true); // Ya está en la versión anterior
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabase.auth.signUp({ //
         email,
         password,
       });
       if (authError) {
-        console.error('[AuthContext] register: authError:', authError);
-        toast.error(authError.message.includes('already registered') ? 'Este correo ya está registrado' : authError.message);
-        setIsLoading(false);
+        console.error('[AuthContext] register: authError:', authError); //
+        toast.error(authError.message.includes('already registered') ? 'Este correo ya está registrado' : authError.message); //
+        // setIsLoading(false);
         throw authError;
       }
 
-      if (authData.user && authData.user.email) {
+      if (authData.user && authData.user.email) { //
         const { error: profileError } = await supabase
           .from('users')
-          .insert([{ id: authData.user.id, email: authData.user.email, name: name }]);
+          .insert([{ id: authData.user.id, email: authData.user.email, name: name }]); //
         if (profileError) {
-          console.error('[AuthContext] register: profileError:', profileError);
+          console.error('[AuthContext] register: profileError:', profileError); //
           toast.error('Error al crear el perfil de usuario.');
-          setIsLoading(false);
+          // setIsLoading(false);
           throw profileError;
         }
-        toast.success(`¡Bienvenido ${name}! Tu cuenta ha sido creada. Revisa tu correo para confirmar.`);
-      } else { //
+        toast.success(`¡Bienvenido ${name}! Tu cuenta ha sido creada. Revisa tu correo para confirmar.`); //
+      } else {
         toast.error('No se pudo completar el registro.');
       }
-       // onAuthStateChange (y por lo tanto processUserSession) se encargará de setIsLoading(false)
     } catch (error) {
-      setIsLoading(false);
+      // setIsLoading(false);
       throw error;
     }
   };
 
   const logout = async () => {
-    setIsLoading(true);
-    const { error } = await supabase.auth.signOut();
+    // setIsLoading(true); // Ya está en la versión anterior
+    const { error } = await supabase.auth.signOut(); //
     if (error) {
-      console.error('[AuthContext] logout: error:', error);
+      console.error('[AuthContext] logout: error:', error); //
       toast.error('Error al cerrar sesión.');
-      setIsLoading(false); 
+      // setIsLoading(false); // processUserSession lo hará
       throw error;
     }
-     // onAuthStateChange (y por lo tanto processUserSession) se encargará de setIsLoading(false)
     toast.success('Has cerrado sesión.');
   };
+
 
   if (isLoading && !initialLoadDone.current) {
     console.log('[AuthContext] Rendering "Loading app..." screen.');
@@ -271,8 +252,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         isAuthenticated,
-        setUser, // Aún se expone por si ProfilePage lo necesita directamente, aunque es preferible refreshUserProfile
-        refreshUserProfile,
+        setUser,
+        refreshUserProfile, // Exponer la nueva función
       }}
     >
       {children}
