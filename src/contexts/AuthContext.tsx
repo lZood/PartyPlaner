@@ -93,8 +93,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(null);
           setIsAuthenticated(false);
         }
-        } finally {
-            setIsLoading(false); // Quita temporalmente la condición isMounted para esta línea
+      } finally {
+        setIsLoading(false);
         }
       }
     };
