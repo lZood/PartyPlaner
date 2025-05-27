@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Plus, Package, Star, Edit, Trash2, X, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { categories } from '../data/categories';
-import { Service } from '../types'; // Asegúrate que esta importación sea correcta
+import { Service } from '../types'; // Asegúrate que Service esté bien definida
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'react-toastify';
+import { AppUser } from '../contexts/AuthContext'; // Importar AppUser desde AuthContext
 
 interface ImageUpload {
   file: File;
@@ -13,43 +14,25 @@ interface ImageUpload {
   isMain?: boolean;
 }
 
-// Define AppUser aquí si no lo tienes globalmente o importado de AuthContext
-// Esta definición debe coincidir con la que uses en AuthContext (id, email, name)
-if (setAuthUser && user) {
-  const updatedUserData: AppUser = { // Tipar explícitamente
-    id: user.id,
-    email: user.email, // El email no se modifica desde el formulario
-    name: formData.name,
-    phone: formData.phone,
-    // avatar_url: user.avatar_url, // Mantener si no se actualiza aquí
-  };
-  console.log('[ProfilePage] Calling setAuthUser with:', updatedUserData);
-  setAuthUser(updatedUserData);
-}
-
-
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL!,
   import.meta.env.VITE_SUPABASE_ANON_KEY!
 );
 
 const ProfilePage: React.FC = () => {
-  const { user, isAuthenticated, setUser: setAuthUser } = useAuth(); // setUser de AuthContext
+  const { user, isAuthenticated, setUser: setAuthUser } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'profile' | 'services'>('profile');
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [mainImage, setMainImage] = useState<ImageUpload | null>(null);
   const [galleryImages, setGalleryImages] = useState<ImageUpload[]>([]);
-  // const [uploadProgress, setUploadProgress] = useState(0); // Comentado si no se usa aún
   const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
   const [isSubmittingService, setIsSubmittingService] = useState(false);
 
-
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<Partial<AppUser>>({ // Usar Partial<AppUser> o campos explícitos
     name: '',
-    email: '',
+    email: '', // El email se mostrará del contexto, no se enviará para actualización
     phone: '',
-    // avatar_url: '', // Si vas a manejar avatar_url
   });
 
   const [serviceFormData, setServiceFormData] = useState({
@@ -61,22 +44,21 @@ const ProfilePage: React.FC = () => {
     price: '',
     features: [''],
   });
-  const [myServices, setMyServices] = useState<Service[]>([]); // Asumiendo que Service es tu tipo correcto
+  const [myServices, setMyServices] = useState<Service[]>([]);
 
-  // Efecto para inicializar y actualizar el formulario cuando el usuario cambie
   useEffect(() => {
     if (user) {
+      console.log('[ProfilePage] useEffect updating formData from user context:', user);
       setFormData({
         name: user.name || '',
-        email: user.email || '',
-        phone: (user as any).phone || '', // Asumiendo que phone puede estar en user
-        // avatar_url: user.avatar_url || '',
+        email: user.email || '', // Para mostrarlo, no para edición
+        phone: user.phone || '',
       });
     }
-  }, [user]);
-
+  }, [user]); // Dependencia del objeto user del contexto
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>, isMain: boolean = false) => {
+    // ... (sin cambios)
     const files = e.target.files;
     if (!files) return;
 
@@ -110,6 +92,7 @@ const ProfilePage: React.FC = () => {
   };
 
   const removeImage = (index: number, isMain: boolean = false) => {
+    // ... (sin cambios)
     if (isMain) {
       setMainImage(null);
     } else {
@@ -119,90 +102,95 @@ const ProfilePage: React.FC = () => {
 
   useEffect(() => {
     if (!isAuthenticated) {
+      console.log('[ProfilePage] Not authenticated, navigating to home.');
       navigate('/');
-    } else {
+    } else if (user?.id){ // Asegurarse que user.id existe
         document.title = 'Mi Perfil | CABETG Party Planner';
-        // Fetch user's services
         const fetchServices = async () => {
-          if (!user?.id) return; // Asegurarse que user.id existe
-          
-          console.log(`Workspaceing services for provider_id: ${user.id}`);
+          console.log(`[ProfilePage] Fetching services for provider_id: ${user.id}`);
           const { data: servicesData, error } = await supabase
             .from('services')
             .select('*')
             .eq('provider_id', user.id);
 
           if (error) {
-            console.error('Error fetching services:', error);
+            console.error('[ProfilePage] Error fetching services:', error);
             toast.error(`Error al cargar tus servicios: ${error.message}`);
             return;
           }
-          console.log('Services fetched:', servicesData);
-          // Asegúrate de que los datos coinciden con la interfaz Service
-          // Puede que necesites transformar los datos si los nombres de columna son diferentes (ej. short_description vs shortDescription)
-          setMyServices(servicesData as Service[]);
+          console.log('[ProfilePage] Services fetched:', servicesData);
+          setMyServices(servicesData as Service[]); // Asume que los datos son compatibles
         };
-
-        if (user?.id) {
-          fetchServices();
-        }
+        fetchServices();
+    } else if (isAuthenticated && !user?.id) {
+        console.warn('[ProfilePage] Authenticated but user.id is missing. User object:', user);
+        // Podría ser un estado transitorio mientras AuthContext carga el usuario.
+        // O un problema si el usuario se autentica pero no se establece correctamente.
     }
-  }, [isAuthenticated, navigate, user?.id]);
+  }, [isAuthenticated, navigate, user]); // Dependencia en 'user' completo para reaccionar a cambios
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !user.id) {
-      toast.error('Usuario no autenticado.');
+      toast.error('Usuario no autenticado. No se puede actualizar el perfil.');
       return;
     }
+    
+    console.log('[ProfilePage] handleProfileSubmit called. Current isSubmittingProfile:', isSubmittingProfile, 'Form Data:', formData);
+    if (isSubmittingProfile) {
+        console.warn('[ProfilePage] Profile update already in progress. Aborting.');
+        return;
+    }
     setIsSubmittingProfile(true);
+
     try {
-      // Solo actualizamos 'name' y 'phone'. 'email' no se envía para actualización.
-      // 'avatar_url' se manejaría por separado si fuera un campo de subida de archivo.
       const updates = {
         name: formData.name,
         phone: formData.phone,
-        // Si tienes avatar_url y lo manejas como un string:
-        // avatar_url: formData.avatar_url,
-        updated_at: new Date().toISOString(), // Actualizar timestamp
+        updated_at: new Date().toISOString(),
       };
 
-      console.log('Updating profile for user ID:', user.id, 'with data:', updates);
+      console.log('[ProfilePage] Updating profile for user ID:', user.id, 'with data:', updates);
 
       const { error } = await supabase
-        .from('users') // Tu tabla pública 'users'
+        .from('users')
         .update(updates)
         .eq('id', user.id);
 
       if (error) {
-        console.error('Error updating profile:', error);
+        console.error('[ProfilePage] Error updating profile in Supabase:', error);
         toast.error(`Error al actualizar el perfil: ${error.message}`);
-        throw error;
+        // No lanzar el error aquí para que el finally se ejecute
+      } else {
+        toast.success('Perfil actualizado con éxito!');
+        console.log('[ProfilePage] Profile updated successfully in Supabase.');
+
+        if (setAuthUser) { // setAuthUser viene de useAuth()
+          const updatedUserContextData: AppUser = {
+            id: user.id,
+            email: user.email, // El email no cambia
+            name: formData.name!, // formData.name debería estar definido
+            phone: formData.phone,
+            avatar_url: user.avatar_url, // Mantener el avatar_url existente del contexto
+          };
+          console.log('[ProfilePage] Calling setAuthUser from AuthContext with:', updatedUserContextData);
+          setAuthUser(updatedUserContextData);
+        }
       }
-
-      toast.success('Perfil actualizado con éxito!');
-      console.log('Profile updated successfully.');
-
-      // Actualizar el estado del usuario en AuthContext si es necesario
-      // Esto es importante para que los cambios se reflejen en toda la app (ej. Header)
-      if (setAuthUser) {
-        const updatedUser = { ...user, name: formData.name, phone: formData.phone };
-        setAuthUser(updatedUser as AppUser); // Asegúrate que AppUser es el tipo correcto
-      }
-
-    } catch (error) {
-      // El toast de error ya se muestra arriba si es un error de Supabase
-      console.error('Catch block error updating profile:', error);
+    } catch (error) { // Captura errores inesperados, los de Supabase se manejan arriba
+      console.error('[ProfilePage] Catch block: Unexpected error updating profile:', error);
+      toast.error('Ocurrió un error inesperado al actualizar el perfil.');
     } finally {
+      console.log('[ProfilePage] handleProfileSubmit finally block. Setting isSubmittingProfile to false.');
       setIsSubmittingProfile(false);
     }
   };
 
-
   const handleServiceSubmit = async (e: React.FormEvent) => {
+    // ... (sin cambios significativos en esta función, asegúrate que 'user' exista y tenga 'id', 'name', 'email')
     e.preventDefault();
-    if (!user) {
-        toast.error("Debes estar autenticado para crear un servicio.");
+    if (!user || !user.id || !user.name || !user.email) {
+        toast.error("Debes estar autenticado y tu perfil debe estar completo para crear un servicio.");
         return;
     }
     setIsSubmittingService(true);
@@ -210,22 +198,18 @@ const ProfilePage: React.FC = () => {
     try {
       if (!mainImage) {
         toast.error('Por favor selecciona una imagen principal');
+        setIsSubmittingService(false); // Resetear estado si hay error temprano
         return;
       }
 
-      // 1. Subir imagen principal
       const mainImageFileName = `${user.id}/${Date.now()}_${mainImage.file.name.replace(/\s/g, '_')}`;
       const { data: mainUploadData, error: mainImageError } = await supabase.storage
-        .from('service-images') // Nombre de tu bucket
+        .from('service-images')
         .upload(mainImageFileName, mainImage.file);
 
       if (mainImageError) throw mainImageError;
-      // const mainImageUrl = supabase.storage.from('service-images').getPublicUrl(mainUploadData.path).data.publicUrl;
-      // Por ahora guardaremos solo el path, ya que la URL pública se puede construir.
       const mainImageStoragePath = mainUploadData.path;
 
-
-      // 2. Subir imágenes de galería
       const galleryStoragePaths: string[] = [];
       for (const image of galleryImages) {
         const galleryImageFileName = `${user.id}/${Date.now()}_${image.file.name.replace(/\s/g, '_')}`;
@@ -236,7 +220,6 @@ const ProfilePage: React.FC = () => {
         galleryStoragePaths.push(galleryUploadData.path);
       }
 
-      // 3. Crear registro del servicio en la tabla 'services'
       const serviceToInsert = {
         name: serviceFormData.name,
         category_id: serviceFormData.categoryId,
@@ -245,16 +228,13 @@ const ProfilePage: React.FC = () => {
         description: serviceFormData.description,
         price: serviceFormData.price ? parseFloat(serviceFormData.price) : null,
         provider_id: user.id,
-        provider_name: user.name, // Puedes tomarlo del user de AuthContext
-        provider_email: user.email, // Puedes tomarlo del user de AuthContext
+        provider_name: user.name,
+        provider_email: user.email,
         features: serviceFormData.features.filter(f => f.trim() !== ''),
-        // No incluyas imageUrl o gallery aquí, se manejarán con service_images
-        is_approved: false, // Por defecto podría ser false hasta revisión de admin
-        rating: 0, // Valor inicial
-        review_count: 0 // Valor inicial
+        is_approved: false,
+        rating: 0,
+        review_count: 0
       };
-
-      console.log('Inserting new service:', serviceToInsert);
 
       const { data: newService, error: serviceError } = await supabase
         .from('services')
@@ -265,22 +245,16 @@ const ProfilePage: React.FC = () => {
       if (serviceError) throw serviceError;
       if (!newService) throw new Error("No se pudo obtener el servicio creado.");
 
-      console.log('New service created:', newService);
-
-      // 4. Crear registros en 'service_images'
-      const serviceImagesToInsert = [];
-      // Imagen principal
-      serviceImagesToInsert.push({
+      const serviceImagesToInsert = [{
         service_id: newService.id,
-        storage_path: mainImageStoragePath, // Usar el path de storage
+        storage_path: mainImageStoragePath,
         is_main_image: true,
         position: 0
-      });
-      // Imágenes de galería
+      }];
       galleryStoragePaths.forEach((path, index) => {
         serviceImagesToInsert.push({
           service_id: newService.id,
-          storage_path: path, // Usar el path de storage
+          storage_path: path,
           is_main_image: false,
           position: index + 1
         });
@@ -296,58 +270,46 @@ const ProfilePage: React.FC = () => {
       setShowServiceForm(false);
       setMainImage(null);
       setGalleryImages([]);
-      setServiceFormData({ // Resetear formulario de servicio
+      setServiceFormData({
         name: '', categoryId: '', subcategoryId: '', shortDescription: '',
         description: '', price: '', features: [''],
       });
 
-      // Refrescar la lista de servicios del usuario
-        if (user?.id) {
+        // Refrescar la lista de servicios del usuario
+        if (user?.id) { // user.id ya verificado al inicio de la función
             const { data: updatedServicesData, error: fetchError } = await supabase
             .from('services')
-            .select('*') // Ajusta las columnas que necesitas
+            .select('*')
             .eq('provider_id', user.id);
 
             if (fetchError) {
-            console.error('Error fetching updated services:', fetchError);
+                console.error('[ProfilePage] Error fetching updated services after creation:', fetchError);
             } else if (updatedServicesData) {
-                // Transforma los datos si es necesario para que coincidan con tu interfaz Service
-                const transformedServices = updatedServicesData.map(s => ({
-                    ...s,
-                    // Aquí puedes necesitar buscar la imagen principal de service_images
-                    // Por simplicidad, lo omito, pero en una app real lo harías
-                    imageUrl: s.imageUrl || 'https://via.placeholder.com/300', // Placeholder
-                    gallery: s.gallery || [], // Placeholder
-                    features: Array.isArray(s.features) ? s.features : [],
-                    options: Array.isArray(s.options) ? s.options : [],
-                }));
-                setMyServices(transformedServices as Service[]);
+                setMyServices(updatedServicesData as Service[]);
             }
         }
 
     } catch (error: any) {
-      console.error('Error creating service:', error);
+      console.error('[ProfilePage] Error creating service:', error);
       toast.error(`Error al crear el servicio: ${error.message || 'Error desconocido'}`);
     } finally {
       setIsSubmittingService(false);
     }
   };
 
-
   const handleAddFeature = () => {
+    // ... (sin cambios)
     setServiceFormData(prev => ({
       ...prev,
       features: [...prev.features, '']
     }));
   };
-
-  if (!isAuthenticated || !user) { // Asegurar que user también exista
-    // navigate('/'); // Esto podría causar un bucle si se renderiza antes de que el auth esté listo.
-    // Es mejor que AuthProvider muestre un loader o maneje la redirección.
+  
+  // Renderizado condicional mientras se espera al usuario del contexto
+  if (isLoading || !user) { // isLoading de AuthContext o si user aún es null
     return <div className="flex justify-center items-center min-h-screen">Cargando perfil...</div>;
   }
-
-
+  // ... (resto del JSX sin cambios significativos, pero revisa las props de formData)
   return (
     <div className="bg-gray-50 py-12">
       <div className="container-custom max-w-4xl">
@@ -381,12 +343,11 @@ const ProfilePage: React.FC = () => {
           <div className="bg-white rounded-xl shadow-md p-6 md:p-8">
           <div className="flex items-center mb-8">
             <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center">
-              {/* Aquí podrías mostrar user.avatar_url si lo implementas */}
               <User size={40} className="text-primary-500" />
             </div>
             <div className="ml-6">
-              <h2 className="text-2xl font-bold">{formData.name || user?.name}</h2>
-              <p className="text-gray-600">{formData.email || user?.email}</p>
+              <h2 className="text-2xl font-bold">{formData.name || ''}</h2>
+              <p className="text-gray-600">{formData.email || ''}</p>
             </div>
           </div>
 
@@ -421,8 +382,8 @@ const ProfilePage: React.FC = () => {
                   type="email"
                   id="profileEmail"
                   value={formData.email}
-                  readOnly // Hacer el campo de solo lectura
-                  disabled // Deshabilitar el campo
+                  readOnly 
+                  disabled 
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed focus:outline-none focus:ring-0"
                 />
               </div>
@@ -439,15 +400,13 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="tel"
                   id="profilePhone"
-                  value={formData.phone}
+                  value={formData.phone || ''}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
                   placeholder="Ej. 5512345678"
                 />
               </div>
             </div>
-
-            {/* Aquí podrías añadir un campo para avatar_url si lo implementas */}
 
             <div className="pt-6 border-t border-gray-200">
               <button
@@ -468,7 +427,6 @@ const ProfilePage: React.FC = () => {
           </form>
         </div>
         ) : (
-          // ... (resto del código para la pestaña "Mis Servicios" sin cambios)
           <div className="space-y-6">
             {/* Services Header */}
             <div className="flex justify-between items-center">
@@ -756,8 +714,7 @@ const ProfilePage: React.FC = () => {
               </div>
             )}
 
-            {/* Services List */}
-            {myServices.length === 0 && !showServiceForm ? ( // Ocultar si el formulario está abierto
+            {myServices.length === 0 && !showServiceForm ? (
               <div className="bg-white rounded-xl shadow-md p-8 text-center">
                 <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Package className="text-primary-500" size={32} />
@@ -770,31 +727,14 @@ const ProfilePage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {myServices.map(service => {
-                  // Intenta obtener la URL completa de la imagen principal desde service_images
-                  // Esto es una simplificación; idealmente, la consulta inicial a 'services'
-                  // haría un JOIN o una subconsulta para obtener la imagen principal.
-                  // O, el objeto 'service' ya vendría con la URL completa.
-                  // Por ahora, asumimos que service.imageUrl es el path de Supabase Storage
-                  // o una URL completa si ya la tienes.
-
-                  // Si `service.imageUrl` es solo un path, necesitas construir la URL pública.
-                  // let displayImageUrl = service.imageUrl; // Asume que ya es una URL o placeholder
-                  // Si tienes el path de storage y necesitas la URL pública:
-                  // if (service.storage_path_main_image) { // Si tienes un campo así
-                  //   displayImageUrl = supabase.storage.from('service-images').getPublicUrl(service.storage_path_main_image).data.publicUrl;
-                  // }
-
-                  // Para este ejemplo, usaré service.imageUrl asumiendo que es usable o un placeholder
                   const displayImageUrl = service.imageUrl || 'https://via.placeholder.com/300x200?text=Sin+Imagen';
-
-
                   return (
                     <div key={service.id} className="bg-white rounded-xl shadow-md overflow-hidden">
                         <img
                         src={displayImageUrl}
                         alt={service.name}
                         className="w-full h-48 object-cover"
-                        onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/300x200?text=Error+Img')} // Fallback
+                        onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/300x200?text=Error+Img')}
                         />
                         <div className="p-6">
                         <h3 className="text-xl font-semibold mb-2">{service.name}</h3>
