@@ -11,6 +11,7 @@ interface UserMenuProps {
 const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  // Estado local para la carga del logout
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, logout, isAuthenticated } = useAuth();
@@ -22,20 +23,22 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
         setIsOpen(false);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleLogout = async () => {
-    setIsLoggingOut(true);
+    setIsLoggingOut(true); // Iniciar estado de carga del logout
     try {
       await logout();
-      setIsOpen(false);
-      navigate('/');
+      setIsOpen(false); // Cerrar el menú después del logout
+      navigate('/'); // Redirigir al home
     } catch (error) {
       console.error('Error logging out:', error);
+      // Aquí podrías mostrar una notificación de error al usuario
     } finally {
-      setIsLoggingOut(false);
+      setIsLoggingOut(false); // Finalizar estado de carga, independientemente del resultado
     }
   };
 
@@ -54,6 +57,7 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
         <User size={24} />
       </button>
 
+      {/* Solo renderizar el menú desplegable si isOpen es true, el usuario está autenticado Y existe el objeto user */}
       {isOpen && isAuthenticated && user && (
         <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg py-1 z-50 ring-1 ring-black ring-opacity-5">
           <div className="px-4 py-3 border-b border-gray-200">
@@ -68,7 +72,7 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
           <Link
             to="/profile"
             className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-            onClick={() => setIsOpen(false)}
+            onClick={() => setIsOpen(false)} // Cerrar menú al navegar
           >
             <Settings size={16} className="mr-3 text-gray-500" />
             Mi Perfil
@@ -77,9 +81,8 @@ const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
           <button
             onClick={handleLogout}
             className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-            disabled={isLoggingOut} // El ">" debe estar aquí para cerrar la etiqueta de apertura
-          > 
-            {/* El contenido del botón (hijos) comienza DESPUÉS del ">" de arriba */}
+            disabled={isLoggingOut} // Usar el estado local isLoggingOut
+          >
             {isLoggingOut ? (
               <Loader2 size={16} className="mr-3 animate-spin text-gray-500" />
             ) : (
