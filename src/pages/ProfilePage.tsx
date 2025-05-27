@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Plus, Package, Star, Edit, Trash2, X, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { categories } from '../data/categories';
-import { Service } from '../types';
-import { createClient } from '@supabase/supabase-js';
+import { categories } from '../data/categories'; //
+import { Service } from '../types'; //
+import { createClient } from '@supabase/supabase-js'; //
 import { toast } from 'react-toastify';
-import { AppUser } from '../contexts/AuthContext'; // Importar AppUser desde AuthContext
+import { AppUser } from '../contexts/AuthContext'; //
 
 interface ImageUpload {
   file: File;
@@ -20,7 +20,7 @@ const supabase = createClient(
 );
 
 const ProfilePage: React.FC = () => {
-  const { user, isAuthenticated, setUser: setAuthUser } = useAuth();
+  const { user, isAuthenticated, setUser: setAuthUser } = useAuth(); //
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'profile' | 'services'>('profile');
   const [showServiceForm, setShowServiceForm] = useState(false);
@@ -57,7 +57,7 @@ const ProfilePage: React.FC = () => {
         avatar_url: user.avatar_url || '',
       });
     }
-  }, [user]);
+  }, [user]); //
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>, isMain: boolean = false) => {
     const files = e.target.files;
@@ -76,7 +76,7 @@ const ProfilePage: React.FC = () => {
           setMainImage(imageUpload);
         } else {
           setGalleryImages(prev => {
-            if (prev.length >= 5) {
+            if (prev.length >= 5) { //
               toast.warn('Máximo 5 imágenes en la galería');
               return prev;
             }
@@ -100,18 +100,16 @@ const ProfilePage: React.FC = () => {
     if (!isAuthenticated) {
       console.log('[ProfilePage] Not authenticated, navigating to home.');
       navigate('/');
-      return; // Salir temprano si no está autenticado
+      return; 
     }
-    // Si está autenticado, pero el user aún no está cargado, useAuth podría estar en proceso.
-    // El return condicional al final del componente se encargará de mostrar "Cargando perfil..."
     if (user?.id){
-        document.title = 'Mi Perfil | CABETG Party Planner';
+        document.title = 'Mi Perfil | CABETG Party Planner'; //
         const fetchServices = async () => {
           console.log(`[ProfilePage] Fetching services for provider_id: ${user.id}`);
           const { data: servicesData, error } = await supabase
             .from('services')
             .select('*')
-            .eq('provider_id', user.id);
+            .eq('provider_id', user.id); //
 
           if (error) {
             console.error('[ProfilePage] Error fetching services:', error);
@@ -132,27 +130,33 @@ const ProfilePage: React.FC = () => {
       return;
     }
     
-    console.log('[ProfilePage] handleProfileSubmit called. Current isSubmittingProfile:', isSubmittingProfile, 'Form Data:', formData);
     if (isSubmittingProfile) {
         console.warn('[ProfilePage] Profile update already in progress. Aborting.');
         return;
     }
-    setIsSubmittingProfile(true);
+    
+    console.log('[ProfilePage] Setting isSubmittingProfile to true.');
+    setIsSubmittingProfile(true); 
 
     try {
-      const updates: Partial<AppUser> = { // Tipar updates
+      const updates: Partial<AppUser> = {
         name: formData.name,
         phone: formData.phone,
-        avatar_url: formData.avatar_url, // Asumiendo que avatar_url es parte de AppUser y formData
-        updated_at: new Date().toISOString(),
+        avatar_url: formData.avatar_url ? formData.avatar_url : null,
+        // No enviar 'updated_at' desde el cliente; deja que la base de datos lo maneje.
       };
 
-      console.log('[ProfilePage] Updating profile for user ID:', user.id, 'with data:', updates);
+      console.log('[ProfilePage] Attempting to update profile for user ID:', user.id, 'with data:', updates);
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('users')
         .update(updates)
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select(); 
+
+      console.log('[ProfilePage] Supabase update call finished.');
+      console.log('[ProfilePage] Supabase update response data:', data);
+      console.log('[ProfilePage] Supabase update response error:', error);
 
       if (error) {
         console.error('[ProfilePage] Error updating profile in Supabase:', error);
@@ -160,120 +164,105 @@ const ProfilePage: React.FC = () => {
       } else {
         toast.success('Perfil actualizado con éxito!');
         console.log('[ProfilePage] Profile updated successfully in Supabase.');
-
-        if (setAuthUser) {
-          const updatedUserContextData: AppUser = {
-            id: user.id,
-            email: user.email,
-            name: formData.name!,
-            phone: formData.phone,
-            avatar_url: formData.avatar_url || user.avatar_url, // Mantener el avatar_url si no se actualiza
-          };
-          console.log('[ProfilePage] Calling setAuthUser from AuthContext with:', updatedUserContextData);
-          setAuthUser(updatedUserContextData);
-        }
       }
-    } catch (error) {
-      console.error('[ProfilePage] Catch block: Unexpected error updating profile:', error);
+    } catch (errorCatch) { 
+      console.error('[ProfilePage] Catch block: Unexpected error updating profile:', errorCatch);
       toast.error('Ocurrió un error inesperado al actualizar el perfil.');
     } finally {
       console.log('[ProfilePage] handleProfileSubmit finally block. Setting isSubmittingProfile to false.');
-      setIsSubmittingProfile(false);
+      setIsSubmittingProfile(false); 
     }
   };
-
+  
   const handleServiceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !user.id || !user.name || !user.email) {
-        toast.error("Debes estar autenticado y tu perfil debe estar completo para crear un servicio.");
+    if (!user || !user.id || !user.name || !user.email) { //
+        toast.error("Debes estar autenticado y tu perfil debe estar completo para crear un servicio."); //
         return;
     }
-    setIsSubmittingService(true);
+    setIsSubmittingService(true); //
     try {
-      if (!mainImage) {
-        toast.error('Por favor selecciona una imagen principal');
-        setIsSubmittingService(false);
+      if (!mainImage) { //
+        toast.error('Por favor selecciona una imagen principal'); //
+        setIsSubmittingService(false); //
         return;
       }
-      const mainImageFileName = `${user.id}/${Date.now()}_${mainImage.file.name.replace(/\s/g, '_')}`;
-      const { data: mainUploadData, error: mainImageError } = await supabase.storage
-        .from('service-images')
-        .upload(mainImageFileName, mainImage.file);
-      if (mainImageError) throw mainImageError;
-      const mainImageStoragePath = mainUploadData.path;
+      const mainImageFileName = `${user.id}/${Date.now()}_${mainImage.file.name.replace(/\s/g, '_')}`; //
+      const { data: mainUploadData, error: mainImageError } = await supabase.storage //
+        .from('service-images') //
+        .upload(mainImageFileName, mainImage.file); //
+      if (mainImageError) throw mainImageError; //
+      const mainImageStoragePath = mainUploadData.path; //
 
-      const galleryStoragePaths: string[] = [];
-      for (const image of galleryImages) {
-        const galleryImageFileName = `${user.id}/${Date.now()}_${image.file.name.replace(/\s/g, '_')}`;
-        const { data: galleryUploadData, error: galleryError } = await supabase.storage
-          .from('service-images')
-          .upload(galleryImageFileName, image.file);
-        if (galleryError) throw galleryError;
-        galleryStoragePaths.push(galleryUploadData.path);
+      const galleryStoragePaths: string[] = []; //
+      for (const image of galleryImages) { //
+        const galleryImageFileName = `${user.id}/${Date.now()}_${image.file.name.replace(/\s/g, '_')}`; //
+        const { data: galleryUploadData, error: galleryError } = await supabase.storage //
+          .from('service-images') //
+          .upload(galleryImageFileName, image.file); //
+        if (galleryError) throw galleryError; //
+        galleryStoragePaths.push(galleryUploadData.path); //
       }
 
-      const serviceToInsert = {
-        name: serviceFormData.name,
-        category_id: serviceFormData.categoryId,
-        subcategory_id: serviceFormData.subcategoryId,
-        short_description: serviceFormData.shortDescription,
-        description: serviceFormData.description,
-        price: serviceFormData.price ? parseFloat(serviceFormData.price) : null,
-        provider_id: user.id,
-        provider_name: user.name,
-        provider_email: user.email,
-        features: serviceFormData.features.filter(f => f.trim() !== ''),
-        is_approved: false, rating: 0, review_count: 0
+      const serviceToInsert = { //
+        name: serviceFormData.name, //
+        category_id: serviceFormData.categoryId, //
+        subcategory_id: serviceFormData.subcategoryId, //
+        short_description: serviceFormData.shortDescription, //
+        description: serviceFormData.description, //
+        price: serviceFormData.price ? parseFloat(serviceFormData.price) : null, //
+        provider_id: user.id, //
+        provider_name: user.name, //
+        provider_email: user.email, //
+        features: serviceFormData.features.filter(f => f.trim() !== ''), //
+        is_approved: false, rating: 0, review_count: 0 //
       };
-      const { data: newService, error: serviceError } = await supabase
-        .from('services')
-        .insert(serviceToInsert).select().single();
-      if (serviceError) throw serviceError;
-      if (!newService) throw new Error("No se pudo obtener el servicio creado.");
+      const { data: newService, error: serviceError } = await supabase //
+        .from('services') //
+        .insert(serviceToInsert).select().single(); //
+      if (serviceError) throw serviceError; //
+      if (!newService) throw new Error("No se pudo obtener el servicio creado."); //
 
-      const serviceImagesToInsert = [{
-        service_id: newService.id, storage_path: mainImageStoragePath,
-        is_main_image: true, position: 0
+      const serviceImagesToInsert = [{ //
+        service_id: newService.id, storage_path: mainImageStoragePath, //
+        is_main_image: true, position: 0 //
       }];
-      galleryStoragePaths.forEach((path, index) => {
-        serviceImagesToInsert.push({
-          service_id: newService.id, storage_path: path,
-          is_main_image: false, position: index + 1
+      galleryStoragePaths.forEach((path, index) => { //
+        serviceImagesToInsert.push({ //
+          service_id: newService.id, storage_path: path, //
+          is_main_image: false, position: index + 1 //
         });
       });
-      const { error: serviceImagesError } = await supabase.from('service_images').insert(serviceImagesToInsert);
-      if (serviceImagesError) throw serviceImagesError;
+      const { error: serviceImagesError } = await supabase.from('service_images').insert(serviceImagesToInsert); //
+      if (serviceImagesError) throw serviceImagesError; //
 
-      toast.success('Servicio publicado con éxito! Pendiente de aprobación.');
-      setShowServiceForm(false); setMainImage(null); setGalleryImages([]);
-      setServiceFormData({
-        name: '', categoryId: '', subcategoryId: '', shortDescription: '',
-        description: '', price: '', features: [''],
+      toast.success('Servicio publicado con éxito! Pendiente de aprobación.'); //
+      setShowServiceForm(false); setMainImage(null); setGalleryImages([]); //
+      setServiceFormData({ //
+        name: '', categoryId: '', subcategoryId: '', shortDescription: '', //
+        description: '', price: '', features: [''], //
       });
-      if (user?.id) {
-            const { data: updatedServicesData, error: fetchError } = await supabase
-            .from('services').select('*').eq('provider_id', user.id);
-            if (fetchError) console.error('[ProfilePage] Error fetching updated services after creation:', fetchError);
-            else if (updatedServicesData) setMyServices(updatedServicesData as Service[]);
+      if (user?.id) { //
+            const { data: updatedServicesData, error: fetchError } = await supabase //
+            .from('services').select('*').eq('provider_id', user.id); //
+            if (fetchError) console.error('[ProfilePage] Error fetching updated services after creation:', fetchError); //
+            else if (updatedServicesData) setMyServices(updatedServicesData as Service[]); //
       }
     } catch (error: any) {
       console.error('[ProfilePage] Error creating service:', error);
       toast.error(`Error al crear el servicio: ${error.message || 'Error desconocido'}`);
     } finally {
-      setIsSubmittingService(false);
+      setIsSubmittingService(false); //
     }
   };
 
   const handleAddFeature = () => {
-    setServiceFormData(prev => ({ ...prev, features: [...prev.features, ''] }));
+    setServiceFormData(prev => ({ ...prev, features: [...prev.features, ''] })); //
   };
   
-  // CORRECCIÓN AQUÍ:
-  // Renderizado condicional basado en isAuthenticated y la existencia de user.
-  // AuthContext ya maneja su propio isLoading para la carga inicial de la app.
-  if (!isAuthenticated || !user) {
-    console.log('[ProfilePage] Rendering loading/redirect: isAuthenticated:', isAuthenticated, 'user:', user);
-    return <div className="flex justify-center items-center min-h-screen">Cargando perfil...</div>;
+  if (!isAuthenticated || !user) { //
+    console.log('[ProfilePage] Rendering loading/redirect: isAuthenticated:', isAuthenticated, 'user:', user); //
+    return <div className="flex justify-center items-center min-h-screen">Cargando perfil...</div>; //
   }
 
   return (
@@ -329,7 +318,7 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="text"
                   id="profileName"
-                  value={formData.name || ''} // Usar || '' para evitar undefined en el input
+                  value={formData.name || ''} 
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
                 />
@@ -347,7 +336,7 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="email"
                   id="profileEmail"
-                  value={formData.email || ''} // Usar || ''
+                  value={formData.email || ''} 
                   readOnly 
                   disabled 
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed focus:outline-none focus:ring-0"
@@ -366,14 +355,13 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="tel"
                   id="profilePhone"
-                  value={formData.phone || ''} // Usar || ''
+                  value={formData.phone || ''} 
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
                   placeholder="Ej. 5512345678"
                 />
               </div>
             </div>
-            {/* Campo para avatar_url si lo implementas en el formulario
             <div>
               <label htmlFor="profileAvatarUrl" className="block text-sm font-medium text-gray-700 mb-1">
                 URL del Avatar (opcional)
@@ -392,7 +380,7 @@ const ProfilePage: React.FC = () => {
                 />
               </div>
             </div>
-            */}
+            
 
             <div className="pt-6 border-t border-gray-200">
               <button
@@ -413,9 +401,7 @@ const ProfilePage: React.FC = () => {
           </form>
         </div>
         ) : (
-          // ... (resto de la pestaña Mis Servicios sin cambios)
           <div className="space-y-6">
-            {/* Services Header */}
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Mis Servicios Publicados</h2>
               <button
@@ -427,7 +413,6 @@ const ProfilePage: React.FC = () => {
               </button>
             </div>
 
-            {/* Service Form Modal */}
             {showServiceForm && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                 <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -465,11 +450,11 @@ const ProfilePage: React.FC = () => {
                           id="serviceCategory"
                           required
                           value={serviceFormData.categoryId}
-                          onChange={(e) => setServiceFormData({ ...serviceFormData, categoryId: e.target.value, subcategoryId: '' })} // Reset subcategory
+                          onChange={(e) => setServiceFormData({ ...serviceFormData, categoryId: e.target.value, subcategoryId: '' })} 
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300"
                         >
                           <option value="">Seleccionar categoría</option>
-                          {categories.map(category => (
+                          {categories.map(category => ( //
                             <option key={category.id} value={category.id}>
                               {category.name}
                             </option>
@@ -490,9 +475,9 @@ const ProfilePage: React.FC = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 disabled:bg-gray-100"
                         >
                           <option value="">Seleccionar subcategoría</option>
-                          {categories
+                          {categories //
                             .find(cat => cat.id === serviceFormData.categoryId)
-                            ?.subcategories.map(subcat => (
+                            ?.subcategories.map(subcat => ( //
                               <option key={subcat.id} value={subcat.id}>
                                 {subcat.name}
                               </option>
@@ -636,25 +621,25 @@ const ProfilePage: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Características (una por línea)
                       </label>
-                      {serviceFormData.features.map((feature, index) => (
+                      {serviceFormData.features.map((feature, index) => ( //
                         <div key={index} className="flex gap-2 mb-2">
                           <input
                             type="text"
                             value={feature}
                             onChange={(e) => {
-                              const newFeatures = [...serviceFormData.features];
-                              newFeatures[index] = e.target.value;
-                              setServiceFormData({ ...serviceFormData, features: newFeatures });
+                              const newFeatures = [...serviceFormData.features]; //
+                              newFeatures[index] = e.target.value; //
+                              setServiceFormData({ ...serviceFormData, features: newFeatures }); //
                             }}
                             className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300"
                             placeholder={`Característica ${index + 1}`}
                           />
-                          {serviceFormData.features.length > 1 && (
+                          {serviceFormData.features.length > 1 && ( //
                             <button
                                 type="button"
-                                onClick={() => {
-                                const newFeatures = serviceFormData.features.filter((_, i) => i !== index);
-                                setServiceFormData({ ...serviceFormData, features: newFeatures });
+                                onClick={() => { //
+                                const newFeatures = serviceFormData.features.filter((_, i) => i !== index); //
+                                setServiceFormData({ ...serviceFormData, features: newFeatures }); //
                                 }}
                                 className="p-2 text-gray-400 hover:text-error-500"
                                 aria-label={`Eliminar característica ${index + 1}`}
@@ -683,10 +668,10 @@ const ProfilePage: React.FC = () => {
                       </button>
                       <button
                         type="submit"
-                        disabled={isSubmittingService}
+                        disabled={isSubmittingService} //
                         className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-70 flex items-center justify-center"
                       >
-                        {isSubmittingService ? (
+                        {isSubmittingService ? ( //
                             <>
                                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                                 Publicando...
@@ -701,7 +686,7 @@ const ProfilePage: React.FC = () => {
               </div>
             )}
 
-            {myServices.length === 0 && !showServiceForm ? (
+            {myServices.length === 0 && !showServiceForm ? ( //
               <div className="bg-white rounded-xl shadow-md p-8 text-center">
                 <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Package className="text-primary-500" size={32} />
@@ -713,15 +698,15 @@ const ProfilePage: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {myServices.map(service => {
-                  const displayImageUrl = service.imageUrl || 'https://via.placeholder.com/300x200?text=Sin+Imagen';
+                {myServices.map(service => { //
+                  const displayImageUrl = service.imageUrl || 'https://via.placeholder.com/300x200?text=Sin+Imagen'; //
                   return (
                     <div key={service.id} className="bg-white rounded-xl shadow-md overflow-hidden">
                         <img
-                        src={displayImageUrl}
+                        src={displayImageUrl} //
                         alt={service.name}
                         className="w-full h-48 object-cover"
-                        onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/300x200?text=Error+Img')}
+                        onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/300x200?text=Error+Img')} //
                         />
                         <div className="p-6">
                         <h3 className="text-xl font-semibold mb-2">{service.name}</h3>
