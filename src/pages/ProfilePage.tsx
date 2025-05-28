@@ -726,26 +726,64 @@ const ProfilePage: React.FC = () => {
       
       const imagesForDbUpsert: Partial<ServiceImage>[] = [];
       let finalPosition = 0;
+      // Main Image
       if (finalMainImageStoragePath) {
-          const existingMain = isEditMode ? editingService?.service_images?.find(i => i.is_main_image && i.storage_path === finalMainImageStoragePath) : undefined;
-          imagesForDbUpsert.push({
-            id: existingMain?.id, 
-            service_id: finalServiceId, storage_path: finalMainImageStoragePath, is_main_image: true, position: finalPosition++,
-          });
+        const existingMainDbRecord = isEditMode 
+          ? editingService?.service_images?.find(img => img.is_main_image && img.storage_path === finalMainImageStoragePath) 
+          : undefined;
+        
+        const mainImageEntry: Partial<ServiceImage> = {
+          service_id: finalServiceId,
+          storage_path: finalMainImageStoragePath,
+          is_main_image: true,
+          position: finalPosition++,
+        };
+        if (existingMainDbRecord?.id) { // If it's an existing main image being kept or updated
+          mainImageEntry.id = existingMainDbRecord.id;
+        }
+        // For a brand new main image, 'id' is omitted, so DB generates it.
+        imagesForDbUpsert.push(mainImageEntry);
       }
       
+      // Kept Existing Gallery Images (these already have an ID)
       keptExistingGalleryDbRecords.forEach(img => {
-          imagesForDbUpsert.push({
-            id: img.id, 
-            service_id: finalServiceId, storage_path: img.storage_path!, is_main_image: false, position: finalPosition++,
-          });
+        if(img.id && img.storage_path){ 
+            imagesForDbUpsert.push({
+                id: img.id, // Existing ID
+                service_id: finalServiceId,
+                storage_path: img.storage_path,
+                is_main_image: false,
+                position: finalPosition++,
+            });
+        }
       });
+
+      // Newly Uploaded Gallery Images (omit 'id' for these)
       uploadedGalleryImageObjects.forEach(obj => {
         imagesForDbUpsert.push({
-          service_id: finalServiceId, storage_path: obj.storage_path, is_main_image: false, position: finalPosition++,
+          // 'id' is omitted here, so PostgreSQL will use the default gen_random_uuid()
+          service_id: finalServiceId,
+          storage_path: obj.storage_path,
+          is_main_image: false,
+          position: finalPosition++,
         });
       });
 
+      if (imagesForDbUpsert.length > 0) {
+          // For upsert, if an object has an 'id', it tries to update.
+          // If an object does NOT have an 'id', it tries to insert (and DB should generate id).
+          const { error: siError } = await supabase
+            .from('service_images')
+            .upsert(imagesForDbUpsert, { onConflict: 'id' }); // onConflict 'id' is correct
+          if (siError) {
+            console.error('Supabase upsert error details:', siError); // Log the full error
+            throw siError;
+          }
+      } else if (!finalMainImageStoragePath && isEditMode && currentServiceId) { 
+          // If all images were removed in edit mode
+          await supabase.from('service_images').delete().eq('service_id', currentServiceId);
+      }
+      
       if (imagesForDbUpsert.length > 0) {
           const { error: siError } = await supabase.from('service_images').upsert(imagesForDbUpsert, { onConflict: 'id' });
           if (siError) throw siError;
