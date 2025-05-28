@@ -14,7 +14,7 @@ interface HeaderProps {
 }
 
 const navLinks = [
-  { to: '/categories', text: 'Servicios' },
+  { to: '/categories', text: 'Categorias' },
   { to: '/about', text: 'Sobre Nosotros' },
   { to: '/contact', text: 'Contacto' },
   { to: '/blog', text: 'Blog' },
