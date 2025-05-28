@@ -5,7 +5,7 @@ import { AppServiceType } from '../types';
 import ServiceCard from '../components/search/ServiceCard';
 import SearchBar from '../components/search/SearchBar';
 import { categories } from '../data/categories';
-import { Loader2, SearchSlash, Filter, Star as StarIcon, X, RotateCcw } from 'lucide-react'; // Added RotateCcw for clear filters
+import { Loader2, SearchSlash, Filter, Star as StarIcon, X, RotateCcw } from 'lucide-react';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL!,
@@ -54,13 +54,12 @@ const SearchResultsPage: React.FC = () => {
       setOriginalServices([]);
       setFilteredServices([]);
       setSearchSummary('');
-      // Reset filters on new search, or load from URL if you implement that
-      // setActiveFilters(initialActiveFilters); 
 
       const locationTextParam = searchParams.get('location_text');
       const latParam = searchParams.get('lat');
       const lonParam = searchParams.get('lon');
       const categoryParam = searchParams.get('category');
+      const subcategoryParam = searchParams.get('subcategory'); // Declaración corregida aquí
       const dateParam = searchParams.get('date');
 
       let titleParts = [];
@@ -71,6 +70,15 @@ const SearchResultsPage: React.FC = () => {
         if (categoryDetails) {
           titleParts.push(categoryDetails.name);
           summaryParts.push(categoryDetails.name);
+          if (subcategoryParam) { // Uso de subcategoryParam
+            const subCategoryDetails = categoryDetails.subcategories.find(sc => sc.id === subcategoryParam);
+            if (subCategoryDetails) {
+              titleParts.push(`- ${subCategoryDetails.name}`);
+              summaryParts.push(`- ${subCategoryDetails.name}`);
+            } else {
+              summaryParts.push(`subcategoría "${subcategoryParam}"`); // Uso de subcategoryParam
+            }
+          }
         } else {
           summaryParts.push(`categoría "${categoryParam}"`);
         }
@@ -101,7 +109,7 @@ const SearchResultsPage: React.FC = () => {
       try {
         const { data: rpcData, error: rpcError } = await supabase.rpc('search_services_rpc', {
           p_category_id: categoryParam || null,
-          p_subcategory_id: subcategoryParam || null,
+          p_subcategory_id: subcategoryParam || null, // Uso de subcategoryParam
           p_search_date: dateParam || null,
           p_location_text: locationTextParam || null,
           p_user_latitude: latParam ? parseFloat(latParam) : null,
@@ -337,7 +345,7 @@ const SearchResultsPage: React.FC = () => {
       
       <div className="container-custom py-8">
         <div className="flex justify-between items-center mb-6">
-            {isLoading && originalServices.length === 0 ? ( // Show "Buscando servicios..." only on initial load
+            {isLoading && originalServices.length === 0 ? ( 
                 <h1 className="text-2xl font-bold text-gray-700">Buscando servicios...</h1>
             ) : error ? (
                 <h1 className="text-2xl font-bold text-red-600">Error en la búsqueda</h1>
@@ -372,7 +380,7 @@ const SearchResultsPage: React.FC = () => {
           )}
 
           <div className="flex-1">
-            {isLoading && originalServices.length === 0 ? ( // Show loader only on initial load
+            {isLoading && originalServices.length === 0 ? ( 
               <div className="flex flex-col justify-center items-center py-20 text-center">
                 <Loader2 className="h-12 w-12 animate-spin text-primary-500" />
                 <p className="mt-4 text-lg text-gray-600">Cargando resultados...</p>
