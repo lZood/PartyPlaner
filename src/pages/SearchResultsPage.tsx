@@ -59,8 +59,12 @@ const SearchResultsPage: React.FC = () => {
       const latParam = searchParams.get('lat');
       const lonParam = searchParams.get('lon');
       const categoryParam = searchParams.get('category');
-      const subcategoryParam = searchParams.get('subcategory'); // Declaración corregida aquí
+      const subcategoryParam = searchParams.get('subcategory');
       const dateParam = searchParams.get('date');
+
+      console.log("Parámetros de búsqueda:", { // <-- DEBUGGING LINE ADDED
+        locationTextParam, latParam, lonParam, categoryParam, subcategoryParam, dateParam
+      });
 
       let titleParts = [];
       let summaryParts = [];
@@ -70,13 +74,13 @@ const SearchResultsPage: React.FC = () => {
         if (categoryDetails) {
           titleParts.push(categoryDetails.name);
           summaryParts.push(categoryDetails.name);
-          if (subcategoryParam) { // Uso de subcategoryParam
+          if (subcategoryParam) {
             const subCategoryDetails = categoryDetails.subcategories.find(sc => sc.id === subcategoryParam);
             if (subCategoryDetails) {
               titleParts.push(`- ${subCategoryDetails.name}`);
               summaryParts.push(`- ${subCategoryDetails.name}`);
             } else {
-              summaryParts.push(`subcategoría "${subcategoryParam}"`); // Uso de subcategoryParam
+              summaryParts.push(`subcategoría "${subcategoryParam}"`);
             }
           }
         } else {
@@ -109,7 +113,7 @@ const SearchResultsPage: React.FC = () => {
       try {
         const { data: rpcData, error: rpcError } = await supabase.rpc('search_services_rpc', {
           p_category_id: categoryParam || null,
-          p_subcategory_id: subcategoryParam || null, // Uso de subcategoryParam
+          p_subcategory_id: subcategoryParam || null,
           p_search_date: dateParam || null,
           p_location_text: locationTextParam || null,
           p_user_latitude: latParam ? parseFloat(latParam) : null,
@@ -121,15 +125,24 @@ const SearchResultsPage: React.FC = () => {
           throw rpcError;
         }
         
+        console.log("Datos crudos del RPC:", rpcData); // <-- DEBUGGING LINE ADDED
+
         const processedServices = rpcData?.map((service: any) => {
+          console.log("Procesando servicio del RPC:", service); // <-- DEBUGGING LINE ADDED
           let imageUrl = 'https://placehold.co/300x200?text=Sin+Imagen';
           if (service.main_image_storage_path) {
+            console.log("Ruta de imagen encontrada en RPC:", service.main_image_storage_path); // <-- DEBUGGING LINE ADDED
             const { data: urlData } = supabase.storage
               .from('service-images')
               .getPublicUrl(service.main_image_storage_path);
-            if (urlData) {
+            if (urlData && urlData.publicUrl) { // <-- DEBUGGING LINE MODIFIED (check publicUrl directly)
               imageUrl = urlData.publicUrl;
+              console.log("URL pública generada:", imageUrl); // <-- DEBUGGING LINE ADDED
+            } else {
+              console.warn("No se pudo obtener urlData.publicUrl para:", service.main_image_storage_path, "Respuesta de getPublicUrl:", urlData); // <-- DEBUGGING LINE MODIFIED
             }
+          } else {
+            console.warn("Servicio sin main_image_storage_path:", service.name || service.id); // <-- DEBUGGING LINE ADDED
           }
           return {
             ...service,
