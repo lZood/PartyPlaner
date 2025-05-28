@@ -2,16 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   User, Mail, Phone, Plus, Package, Star, Upload, Image as ImageIcon,
-  Loader2, MapPin, Compass, Milestone, SearchCheck, CalendarDays, // Desde el código base anterior
-  ShoppingCart, X, Trash2 // ShoppingCart para la nueva pestaña, X y Trash2 para el modal y acciones
+  Loader2, MapPin, Compass, Milestone, SearchCheck, CalendarDays,
+  ShoppingCart, X, Trash2, Edit // Edit para el futuro
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { categories } from '../data/categories';
-// Asegúrate que Reservation y Service estén bien definidos en tus tipos, incluyendo la estructura anidada para service en Reservation
-import { AppUser, Reservation, Service as AppServiceType, ServiceCoverageArea } from '../types'; 
+import { AppUser, Reservation, Service as AppServiceType, ServiceCoverageArea } from '../types';
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'react-toastify';
-import { geocodeAddressNominatim, GeocodingResult } from '../utils/geocoding'; // Corregido en interacciones previas
+import { geocodeAddressNominatim, GeocodingResult } from './geocoding';
 
 interface ImageUpload {
   file: File;
@@ -46,7 +45,6 @@ const ProfilePage: React.FC = () => {
   const { user, isAuthenticated, setUser: setAuthUser } = useAuth();
   const navigate = useNavigate();
   
-  // Estado para la pestaña activa - Añadido 'myPurchases'
   const [activeTab, setActiveTab] = useState<'profile' | 'myServices' | 'myPurchases'>('profile');
   
   const [showServiceForm, setShowServiceForm] = useState(false);
@@ -82,13 +80,10 @@ const ProfilePage: React.FC = () => {
   };
 
   const [serviceFormData, setServiceFormData] = useState<ServiceFormData>(initialServiceFormData);
-  const [myServices, setMyServices] = useState<AppServiceType[]>([]); // Tipo base para servicios del proveedor
-
-  // Nuevos estados para "Mis Compras"
+  const [myServices, setMyServices] = useState<AppServiceType[]>([]); 
   const [myPurchases, setMyPurchases] = useState<Reservation[]>([]);
   const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
-
 
   useEffect(() => {
     if (user) {
@@ -108,121 +103,136 @@ const ProfilePage: React.FC = () => {
     }
     if (user?.id) {
       document.title = 'Mi Perfil | CABETG Party Planner';
-      // Esta lógica de cargar servicios del proveedor se mantiene
-      if (activeTab === 'myServices' || showServiceForm) { // También cargar si el form está abierto o la pestaña es de servicios
+      if (activeTab === 'myServices' || showServiceForm) {
         setIsLoadingServices(true);
         const fetchProviderServices = async () => {
-          const { data: servicesData, error: servicesError } = await supabase
-            .from('services')
-            .select('*, service_coverage_areas(*)')
-            .eq('provider_id', user.id)
-            .order('created_at', { ascending: false });
+          try {
+            const { data: servicesData, error: servicesError } = await supabase
+              .from('services')
+              .select('*, service_coverage_areas(*)')
+              .eq('provider_id', user.id)
+              .order('created_at', { ascending: false });
 
-          if (servicesError) {
-            toast.error(`Error al cargar tus servicios: ${servicesError.message}`);
-            setIsLoadingServices(false);
-            return;
-          }
+            if (servicesError) throw servicesError;
 
-          if (servicesData) {
-            const servicesWithImages = await Promise.all(
-              servicesData.map(async (service) => {
-                const { data: mainImageData } = await supabase
-                  .from('service_images')
-                  .select('storage_path')
-                  .eq('service_id', service.id)
-                  .eq('is_main_image', true)
-                  .single();
+            if (servicesData) {
+              const servicesWithImages = await Promise.all(
+                servicesData.map(async (service) => {
+                  const { data: mainImageData } = await supabase
+                    .from('service_images')
+                    .select('storage_path')
+                    .eq('service_id', service.id)
+                    .eq('is_main_image', true)
+                    .maybeSingle(); // Usar maybeSingle para evitar error si no hay imagen
 
-                let publicUrl = 'https://placehold.co/300x200?text=Sin+Imagen';
-                if (mainImageData?.storage_path) {
-                  const { data: urlData } = supabase.storage
-                    .from('service-images')
-                    .getPublicUrl(mainImageData.storage_path);
-                  if (urlData) publicUrl = urlData.publicUrl;
-                }
-                // Aquí asumimos que AppServiceType puede manejar la estructura devuelta
-                return { ...service, imageUrl: publicUrl, gallery: [], coverage_areas: service.service_coverage_areas || [] } as AppServiceType;
-              })
-            );
-            setMyServices(servicesWithImages);
-          } else {
+                  let publicUrl = 'https://placehold.co/300x200?text=Sin+Imagen';
+                  if (mainImageData?.storage_path) {
+                    const { data: urlData } = supabase.storage
+                      .from('service-images')
+                      .getPublicUrl(mainImageData.storage_path);
+                    if (urlData?.publicUrl) publicUrl = urlData.publicUrl;
+                  }
+                  return { ...service, imageUrl: publicUrl, gallery: [], coverage_areas: service.service_coverage_areas || [] } as AppServiceType;
+                })
+              );
+              setMyServices(servicesWithImages);
+            } else {
+              setMyServices([]);
+            }
+          } catch (error: any) {
+            toast.error(`Error al cargar tus servicios: ${error.message}`);
             setMyServices([]);
+          } finally {
+            setIsLoadingServices(false);
           }
-          setIsLoadingServices(false);
         };
         fetchProviderServices();
       }
     }
-  }, [isAuthenticated, navigate, user, activeTab, showServiceForm]); // Dependencias actualizadas
+  }, [isAuthenticated, navigate, user?.id, activeTab, showServiceForm, supabase]); // user?.id y supabase como dependencias
 
-  // NUEVO useEffect para cargar las compras del cliente
+  // CORREGIDO useEffect para cargar las compras del cliente
   useEffect(() => {
     if (activeTab === 'myPurchases' && user?.id) {
       const fetchPurchases = async () => {
         setIsLoadingPurchases(true);
+        setMyPurchases([]); // Limpiar compras anteriores antes de cargar nuevas
         try {
-          const { data, error } = await supabase
+          // Paso 1: Obtener reservaciones con información básica del servicio.
+          const { data: reservationsData, error: reservationsError } = await supabase
             .from('reservations')
             .select(`
-              id,
-              user_id,
-              service_id,
-              event_date,
-              quantity,
-              status,
-              total_price,
-              customer_name,
-              customer_email,
-              customer_phone,
-              event_location,
-              comments,
-              created_at,
-              updated_at,
-              service:services (
-                name,
-                main_image_storage_path, 
-                provider_name
-              )
+              id, user_id, service_id, event_date, quantity, status, total_price,
+              customer_name, customer_email, customer_phone, event_location,
+              comments, created_at, updated_at,
+              service: services ( name, provider_name )
             `)
             .eq('user_id', user.id)
             .order('created_at', { ascending: false });
 
-          if (error) {
-            throw error;
+          if (reservationsError) {
+            throw reservationsError;
           }
-          
-          const purchasesWithServiceImage = data?.map(purchase => {
+
+          if (!reservationsData) {
+            setMyPurchases([]);
+            setIsLoadingPurchases(false);
+            return;
+          }
+
+          // Paso 2: Para cada reservación, obtener la imagen principal del servicio.
+          const purchasesWithFullServiceInfo = await Promise.all(
+            reservationsData.map(async (purchase) => {
               let serviceImageUrl = 'https://placehold.co/100x80?text=Servicio';
-              // Accedemos a main_image_storage_path desde el objeto service anidado
-              if (purchase.service && (purchase.service as any).main_image_storage_path) {
-                  const { data: urlData } = supabase.storage.from('service-images').getPublicUrl((purchase.service as any).main_image_storage_path);
-                  if (urlData) {
-                      serviceImageUrl = urlData.publicUrl;
+              
+              // El objeto 'service' anidado ya viene de la consulta anterior
+              let fetchedServiceData = purchase.service as { name: string, provider_name: string } | null;
+
+              if (purchase.service_id) {
+                const { data: mainImageData, error: imageError } = await supabase
+                  .from('service_images')
+                  .select('storage_path')
+                  .eq('service_id', purchase.service_id)
+                  .eq('is_main_image', true)
+                  .maybeSingle(); // Usar maybeSingle para evitar error si no hay imagen principal
+
+                if (imageError) {
+                  console.error(`Error al obtener imagen para servicio ${purchase.service_id}: ${imageError.message}`);
+                } else if (mainImageData?.storage_path) {
+                  const { data: urlData } = supabase.storage
+                    .from('service-images')
+                    .getPublicUrl(mainImageData.storage_path);
+                  if (urlData?.publicUrl) {
+                    serviceImageUrl = urlData.publicUrl;
                   }
+                }
               }
+              
+              // Reconstruir el objeto 'service' para el tipo Reservation
+              const finalServiceData = fetchedServiceData 
+                ? { ...fetchedServiceData, imageUrl: serviceImageUrl } 
+                : { name: 'Servicio no disponible', provider_name: 'N/A', imageUrl: serviceImageUrl };
+
               return {
-                  ...purchase,
-                  // Aquí conformamos el objeto 'service' anidado como lo espera el tipo Reservation
-                  service: purchase.service ? {
-                      name: (purchase.service as any).name,
-                      imageUrl: serviceImageUrl, // Este es el que procesamos
-                      provider_name: (purchase.service as any).provider_name
-                  } : undefined
+                ...purchase, // Todas las propiedades de la reservación
+                service: finalServiceData, // El objeto 'service' con la imageUrl
               };
-          }) || [];
-          // Asegúrate que el tipo Reservation en src/types/index.ts coincida con esta estructura
-          setMyPurchases(purchasesWithServiceImage as Reservation[]);
+            })
+          );
+          // Asegúrate que el tipo Reservation en src/types/index.ts coincida con esta estructura.
+          setMyPurchases(purchasesWithFullServiceInfo as unknown as Reservation[]);
+
         } catch (err: any) {
+          console.error("Error completo al cargar compras:", err);
           toast.error(`Error al cargar tus compras: ${err.message}`);
-          setMyPurchases([]); // Limpiar en caso de error
+          setMyPurchases([]);
         } finally {
           setIsLoadingPurchases(false);
         }
       };
       fetchPurchases();
     }
-  }, [activeTab, user, supabase]); // supabase añadido como dependencia
+  }, [activeTab, user?.id, supabase]); // user?.id y supabase como dependencias
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>, isMain: boolean = false) => {
     const files = e.target.files;
@@ -252,7 +262,7 @@ const ProfilePage: React.FC = () => {
       };
       reader.readAsDataURL(file);
     });
-    e.target.value = ''; // Reset file input
+    e.target.value = '';
   };
 
   const removeImage = (index: number, isMain: boolean = false) => {
@@ -275,12 +285,12 @@ const ProfilePage: React.FC = () => {
       const updates: Partial<AppUser> = { 
         name: formData.name, 
         phone: formData.phone, 
-        avatar_url: formData.avatar_url || null // Ensure null if empty
+        avatar_url: formData.avatar_url || null
       };
       const { error } = await supabase.from('users').update(updates).eq('id', user.id);
       if (error) throw error;
       toast.success('Perfil actualizado exitosamente!');
-      if(setAuthUser) { // Actualizar el usuario en el contexto global
+      if(setAuthUser) {
         setAuthUser(prevUser => prevUser ? ({ ...prevUser, ...updates }) : null);
       }
     } catch (error: any) {
@@ -348,7 +358,7 @@ const ProfilePage: React.FC = () => {
     e.preventDefault();
     if (!user?.id || !user.name || !user.email) {
         toast.error("Tu perfil de usuario está incompleto. Por favor, actualízalo antes de publicar servicios.");
-        setActiveTab('profile'); // Dirigir al usuario a la pestaña de perfil
+        setActiveTab('profile');
         return;
     }
     if (isSubmittingService) return;
@@ -373,7 +383,7 @@ const ProfilePage: React.FC = () => {
           const fName = `public/${user.id}/${Date.now()}_${img.file.name.replace(/\s/g, '_')}`;
           const { data, error } = await supabase.storage.from('service-images').upload(fName, img.file);
           if (error) throw error;
-          return data.path; // Devuelve solo el path
+          return data.path; 
         })
       );
 
@@ -417,10 +427,10 @@ const ProfilePage: React.FC = () => {
 
       if (serviceFormData.service_type === 'multiple_areas' && serviceFormData.coverage_areas.length > 0) {
         const coverageAreasToInsert = serviceFormData.coverage_areas
-            .filter(a => a.area_name && a.area_name.trim() !== '') // Asegurar que area_name no sea nulo o vacío
+            .filter(a => a.area_name && a.area_name.trim() !== '')
             .map(a => ({ 
                 service_id: newService.id, 
-                area_name: a.area_name!, // Usar ! porque ya filtramos
+                area_name: a.area_name!,
                 city: a.city || null, 
                 state: a.state || null, 
                 postal_code: a.postal_code || null 
@@ -436,7 +446,7 @@ const ProfilePage: React.FC = () => {
         if (capacity > 0) {
             const availabilityEntries: { service_id: string; date: string; total_capacity: number; booked_capacity: number; is_available: boolean; }[] = [];
             const startDate = new Date(); startDate.setHours(0,0,0,0);
-            const endDate = new Date(startDate); endDate.setFullYear(startDate.getFullYear() + 1); // Disponibilidad por defecto para 1 año
+            const endDate = new Date(startDate); endDate.setFullYear(startDate.getFullYear() + 1);
             for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
               availabilityEntries.push({ 
                 service_id: newService.id, 
@@ -461,14 +471,16 @@ const ProfilePage: React.FC = () => {
       setMainImage(null); 
       setGalleryImages([]); 
       setServiceFormData(initialServiceFormData);
-      // Para refrescar la lista de "Mis Servicios" después de añadir uno nuevo
-      // Podríamos forzar un cambio en activeTab para que el useEffect se dispare, o llamar a una función de recarga.
-      // Por ahora, el usuario tendrá que cambiar de pestaña y volver para ver el nuevo servicio, o se puede implementar una recarga más directa.
-      if (activeTab !== 'myServices') setActiveTab('myServices'); // Intenta cambiar para refrescar
-      else { // Si ya está en la pestaña, forza la recarga de alguna manera o espera la siguiente carga de fetchProviderServices
-        // Aquí podrías añadir el newService directamente al estado myServices para una UI más rápida
-         setMyServices(prev => [newService as AppServiceType, ...prev]); // Asumiendo que newService tiene el formato de AppServiceType
-      }
+      
+      // Actualizar la UI con el nuevo servicio
+      const newServiceWithImageUrl = {
+        ...newService,
+        imageUrl: supabase.storage.from('service-images').getPublicUrl(mainUploadData.path).data.publicUrl,
+        gallery: [], // La galería completa no se carga aquí por simplicidad
+        coverage_areas: serviceFormData.service_type === 'multiple_areas' ? serviceFormData.coverage_areas.map(ca => ({...ca, service_id: newService.id, id: ca.temp_id! })) : [], // Simplificado
+        reservations: [] // Nuevo servicio no tiene reservaciones
+      } as AppServiceType;
+      setMyServices(prev => [newServiceWithImageUrl, ...prev]);
 
 
     } catch (error: any) {
@@ -480,7 +492,6 @@ const ProfilePage: React.FC = () => {
   };
 
   if (!isAuthenticated || !user) {
-    // Esto ya se maneja en el useEffect, pero es una guarda adicional
     return (
       <div className="flex justify-center items-center min-h-screen">
         <Loader2 className="h-10 w-10 animate-spin text-primary-500" />
@@ -491,12 +502,11 @@ const ProfilePage: React.FC = () => {
   
   return (
     <div className="bg-gray-50 py-8 sm:py-12">
-      <div className="container-custom max-w-5xl"> {/* Aumentado max-w */}
+      <div className="container-custom max-w-5xl">
         <div className="flex flex-col sm:flex-row justify-between items-center mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Mi Cuenta</h1>
         </div>
 
-        {/* Pestañas */}
         <div className="flex flex-wrap space-x-1 sm:space-x-2 mb-8 border-b border-gray-300">
           <button
             onClick={() => setActiveTab('profile')}
@@ -518,13 +528,12 @@ const ProfilePage: React.FC = () => {
           </button>
         </div>
 
-        {/* Contenido de las Pestañas */}
         {activeTab === 'profile' && (
           <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
             <div className="flex flex-col sm:flex-row items-center mb-8">
-              <div className="w-24 h-24 bg-primary-100 rounded-full flex items-center justify-center mb-4 sm:mb-0 sm:mr-6">
+              <div className="w-24 h-24 bg-primary-100 rounded-full flex items-center justify-center mb-4 sm:mb-0 sm:mr-6 overflow-hidden border-2 border-primary-200">
                 {formData.avatar_url ? (
-                    <img src={formData.avatar_url} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+                    <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                     <User size={48} className="text-primary-500" />
                 )}
@@ -643,7 +652,6 @@ const ProfilePage: React.FC = () => {
           </div>
         )}
 
-        {/* PESTAÑA MIS COMPRAS */}
         {activeTab === 'myPurchases' && (
           <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
             <h2 className="text-xl sm:text-2xl font-bold mb-6 text-gray-800">Historial de Compras</h2>
@@ -667,11 +675,12 @@ const ProfilePage: React.FC = () => {
                         src={purchase.service?.imageUrl || 'https://placehold.co/120x90?text=Servicio'} 
                         alt={purchase.service?.name || 'Servicio'}
                         className="w-full sm:w-28 h-auto sm:h-24 object-cover rounded-md flex-shrink-0 border"
+                        onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/120x90?text=Img+Error'; }}
                       />
                       <div className="flex-grow">
                         <div className="flex flex-col sm:flex-row justify-between items-start mb-1">
                           <h3 className="text-md sm:text-lg font-semibold text-primary-700 hover:underline">
-                            <Link to={`/service/${purchase.serviceId}`}>{purchase.service?.name || 'Servicio Desconocido'}</Link>
+                            <Link to={`/service/${purchase.service_id}`}>{purchase.service?.name || 'Servicio Desconocido'}</Link>
                           </h3>
                           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap mt-1 sm:mt-0 ${
                             purchase.status === 'confirmed' || purchase.status === 'approved_by_provider' ? 'bg-green-100 text-green-800' :
@@ -692,11 +701,11 @@ const ProfilePage: React.FC = () => {
                           Proveedor: {purchase.service?.provider_name || 'N/A'}
                         </p>
                         <div className="text-xs sm:text-sm text-gray-700 space-y-0.5">
-                          <p><strong>Fecha Evento:</strong> {new Date(purchase.eventDate + 'T00:00:00Z').toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                          <p><strong>Fecha Evento:</strong> {new Date(purchase.event_date + 'T00:00:00Z').toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                           <p><strong>Cantidad:</strong> {purchase.quantity}</p>
-                          <p><strong>Total:</strong> ${purchase.totalPrice.toLocaleString('es-MX')}</p>
-                          <p className="text-gray-500"><strong>Reservado el:</strong> {new Date(purchase.createdAt).toLocaleDateString('es-MX', {day:'numeric', month:'short', year:'numeric'})}</p>
-                          {purchase.eventLocation && <p className="text-gray-500"><strong>Lugar:</strong> {purchase.eventLocation}</p>}
+                          <p><strong>Total:</strong> ${purchase.total_price.toLocaleString('es-MX')}</p>
+                          <p className="text-gray-500"><strong>Reservado el:</strong> {new Date(purchase.created_at).toLocaleDateString('es-MX', {day:'numeric', month:'short', year:'numeric'})}</p>
+                          {purchase.event_location && <p className="text-gray-500"><strong>Lugar:</strong> {purchase.event_location}</p>}
                         </div>
                       </div>
                     </div>
@@ -707,7 +716,6 @@ const ProfilePage: React.FC = () => {
           </div>
         )}
         
-        {/* Modal para el formulario de Nuevo Servicio (showServiceForm) */}
         {showServiceForm && (
             <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                 <div className="bg-white rounded-xl p-5 sm:p-6 w-full max-w-2xl max-h-[95vh] overflow-y-auto shadow-2xl">
@@ -784,7 +792,7 @@ const ProfilePage: React.FC = () => {
                     </div>
 
                     <div> <label className="block text-xs font-medium text-gray-700 mb-1">Imagen Principal*</label><div className={`relative border-2 border-dashed rounded-lg p-3 hover:border-primary-500 transition-colors ${mainImage ? 'border-green-500' : 'border-gray-300'}`}><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleImageSelect(e, true)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>{mainImage ? (<div className="relative group"><img src={mainImage.preview} alt="Preview" className="w-full h-32 object-cover rounded-md"/><button type="button" onClick={() => removeImage(0, true)} className="absolute top-1 right-1 bg-white/80 hover:bg-white rounded-full p-1 shadow-md transition-opacity opacity-0 group-hover:opacity-100"><Trash2 size={14} className="text-red-500"/></button></div>) : (<div className="text-center py-8"><Upload className="mx-auto h-8 w-8 text-gray-400" /><p className="mt-1 text-xs text-gray-600">Clic o arrastra tu imagen principal (Max 5MB)</p></div>)}</div></div>
-                    <div> <label className="block text-xs font-medium text-gray-700 mb-1">Galería de Imágenes (hasta 5 adicionales)</label><div className="grid grid-cols-3 gap-2">{galleryImages.map((img, idx) => <div key={idx} className="relative group aspect-square"><img src={img.preview} alt={`Galería ${idx+1}`} className="w-full h-full object-cover rounded-md"/><button type="button" onClick={() => removeImage(idx)} className="absolute top-1 right-1 bg-white/80 hover:bg-white rounded-full p-0.5 shadow-md transition-opacity opacity-0 group-hover:opacity-100"><Trash2 size={12} className="text-red-500"/></button></div>)}{galleryImages.length < 5 && <label className="relative border-2 border-dashed border-gray-300 rounded-md p-2 h-full min-h-[6rem] flex items-center justify-center cursor-pointer hover:border-primary-500 transition-colors aspect-square"><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handleImageSelect} className="absolute inset-0 w-full h-full opacity-0"/><div className="text-center"><ImageIcon className="mx-auto h-6 w-6 text-gray-400"/><p className="mt-1 text-xs text-gray-500">Añadir</p></div></label>}</div></div>
+                    <div> <label className="block text-xs font-medium text-gray-700 mb-1">Galería de Imágenes (hasta 5 adicionales)</label><div className="grid grid-cols-3 sm:grid-cols-5 gap-2">{galleryImages.map((img, idx) => <div key={idx} className="relative group aspect-square"><img src={img.preview} alt={`Galería ${idx+1}`} className="w-full h-full object-cover rounded-md"/><button type="button" onClick={() => removeImage(idx)} className="absolute top-1 right-1 bg-white/80 hover:bg-white rounded-full p-0.5 shadow-md transition-opacity opacity-0 group-hover:opacity-100"><Trash2 size={12} className="text-red-500"/></button></div>)}{galleryImages.length < 5 && <label className="relative border-2 border-dashed border-gray-300 rounded-md p-2 h-full min-h-[6rem] flex items-center justify-center cursor-pointer hover:border-primary-500 transition-colors aspect-square"><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handleImageSelect} className="absolute inset-0 w-full h-full opacity-0"/><div className="text-center"><ImageIcon className="mx-auto h-6 w-6 text-gray-400"/><p className="mt-1 text-xs text-gray-500">Añadir</p></div></label>}</div></div>
                     <div> <label className="block text-xs font-medium text-gray-700 mb-1">Características Clave (una por línea)</label>{serviceFormData.features.map((feat, idx) => <div key={idx} className="flex gap-1 mb-1.5"><input type="text" value={feat} onChange={e=>handleFeatureChange(idx, e.target.value)} className="flex-1 p-2 border border-gray-300 rounded-md text-sm shadow-sm focus:ring-primary-500 focus:border-primary-500" placeholder={`Característica ${idx+1}`}/>{serviceFormData.features.length > 1 && <button type="button" onClick={()=>handleRemoveFeature(idx)} className="p-1.5 text-gray-400 hover:text-red-500 rounded hover:bg-red-50"><Trash2 size={14}/></button>}</div>)}<button type="button" onClick={handleAddFeature} className="text-xs text-primary-600 hover:text-primary-700 font-medium p-1 rounded hover:bg-primary-50 mt-0.5 flex items-center"><Plus size={14} className="mr-1"/> Agregar característica</button></div>
 
                     <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 mt-2">
@@ -797,7 +805,6 @@ const ProfilePage: React.FC = () => {
                 </div>
             </div>
         )}
-
       </div>
     </div>
   );
