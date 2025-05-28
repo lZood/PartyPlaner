@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, NavLink } from 'react-router-dom'; // Added NavLink
 import { Menu, Search, ShoppingBag, X } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
 import UserMenu from './UserMenu';
 import Logo from '../ui/Logo';
-import { categories } from '../../data/categories';
+// categories import is not used in this new navigation structure directly in the main bar
+// import { categories } from '../../data/categories'; 
 
 interface HeaderProps {
   isScrolled: boolean;
@@ -12,26 +13,31 @@ interface HeaderProps {
   mobileMenuOpen: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ isScrolled, toggleMobileMenu, mobileMenuOpen }) => {
-  const [searchExpanded, setSearchExpanded] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const navigate = useNavigate();
-  const { cart } = useCart(); // Get cart information
-  
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      // Handle search logic
-      console.log('Searching for:', searchQuery);
-      navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
-      setSearchQuery('');
-      setSearchExpanded(false);
-    }
-  };
+const navLinks = [
+  { to: '/categories', text: 'Servicios' },
+  { to: '/about', text: 'Sobre Nosotros' },
+  { to: '/contact', text: 'Contacto' },
+  { to: '/blog', text: 'Blog' },
+];
 
-  const toggleSearch = () => {
-    setSearchExpanded(!searchExpanded);
-  };
+const Header: React.FC<HeaderProps> = ({ isScrolled, toggleMobileMenu, mobileMenuOpen }) => {
+  // const [searchExpanded, setSearchExpanded] = useState(false); // Search is not in the header for now
+  // const [searchQuery, setSearchQuery] = useState(''); // Search is not in the header for now
+  // const navigate = useNavigate(); // Not directly used if search is removed from header
+  const { cart } = useCart(); 
+  
+  // const handleSearch = (e: React.FormEvent) => { // Search logic removed for now
+  //   e.preventDefault();
+  //   if (searchQuery.trim()) {
+  //     navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+  //     setSearchQuery('');
+  //     setSearchExpanded(false);
+  //   }
+  // };
+
+  // const toggleSearch = () => { // Search logic removed for now
+  //   setSearchExpanded(!searchExpanded);
+  // };
 
   return (
     <header className={`bg-white shadow-md sticky top-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2' : 'py-4'}`}>
@@ -43,37 +49,29 @@ const Header: React.FC<HeaderProps> = ({ isScrolled, toggleMobileMenu, mobileMen
           </Link>
         </div>
 
-        {/* Desktop Navigation - Categories */}
-        <nav className="hidden md:flex flex-grow justify-center items-center space-x-1 lg:space-x-2">
-          {categories.slice(0, 5).map((category) => (
-            <Link
-              key={category.id}
-              to={`/category/${category.id}`}
-              className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-primary-50 hover:text-primary-600 transition-colors"
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex flex-grow justify-center items-center space-x-3 lg:space-x-5">
+          {navLinks.map((link) => (
+            <NavLink
+              key={link.text}
+              to={link.to}
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 ease-in-out
+                ${link.text === 'Servicios' ? 
+                  (isActive ? 'text-pink-600 font-bold' : 'text-pink-500 hover:text-pink-700 font-semibold') :
+                  (isActive ? 'text-primary-600 font-semibold' : 'text-gray-700 hover:text-primary-600')
+                }`
+              }
             >
-              {category.name}
-            </Link>
+              {link.text}
+            </NavLink>
           ))}
-          {categories.length > 5 && (
-            <Link
-              to="/categories"
-              className="px-3 py-2 rounded-md text-sm font-medium text-primary-500 hover:bg-primary-100 transition-colors"
-            >
-              Ver todas...
-            </Link>
-          )}
         </nav>
 
         {/* Right side icons */}
         <div className="flex items-center space-x-3 sm:space-x-4">
-          {/* Search Icon (optional, if you want a dedicated search icon before expanding search bar) */}
-          {/* For now, SearchBar is part of HeroSection, but you might want a small search icon here later */}
-          {/* <button onClick={toggleSearch} className="text-gray-700 hover:text-primary-500">
-            <Search size={22} />
-          </button> */}
-
           {/* Cart Icon */}
-          <Link to="/cart" className="relative text-gray-700 hover:text-primary-500">
+          <Link to="/cart" className="relative text-gray-700 hover:text-primary-500" aria-label="Ver carrito de compras">
             <ShoppingBag size={24} />
             {cart.totalItems > 0 && (
               <span className="absolute -top-2 -right-2 bg-secondary-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
@@ -89,29 +87,13 @@ const Header: React.FC<HeaderProps> = ({ isScrolled, toggleMobileMenu, mobileMen
           <button
             onClick={toggleMobileMenu}
             className="md:hidden text-gray-700 hover:text-primary-500"
-            aria-label={mobileMenuOpen ? "Close mobile menu" : "Open mobile menu"}
+            aria-label={mobileMenuOpen ? "Cerrar menú móvil" : "Abrir menú móvil"}
           >
             {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
       </div>
-      {/* Consider if searchExpanded logic is still needed here, or if SearchBar component is primary search */}
-      {/* {searchExpanded && (
-        <div className="container-custom pb-3 md:hidden">
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar servicios..."
-              className="flex-grow px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300"
-            />
-            <button type="submit" className="bg-primary-500 text-white p-2 rounded-md hover:bg-primary-600">
-              <Search size={20} />
-            </button>
-          </form>
-        </div>
-      )} */}
+      {/* Mobile Menu itself is likely rendered in MainLayout.tsx based on mobileMenuOpen state */}
     </header>
   );
 };
