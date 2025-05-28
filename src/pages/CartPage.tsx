@@ -328,7 +328,12 @@ const CartPage: React.FC = () => {
                             Fecha del Evento Seleccionada:
                         </p>
                         <p className="text-sm font-semibold text-blue-800">
-                            {new Date(cartEventDate + "T00:00:00Z").toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            {(() => {
+                              if (!cartEventDate) return '';
+                              const [year, month, day] = cartEventDate.split('-').map(Number);
+                              const localDate = new Date(year, month - 1, day);
+                              return localDate.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                            })()}
                         </p>
                     </div>
                 )}
