@@ -32,55 +32,50 @@ const Header: React.FC<HeaderProps> = ({ isScrolled, toggleMobileMenu, mobileMen
     setSearchExpanded(!searchExpanded);
   };
 
-  return (
-    <header
-      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
-        isScrolled ? 'bg-white shadow-md' : 'bg-transparent'
-      }`}
-    >
-      <div className="container-custom py-4">
-        <div className="flex items-center justify-between">
-          {/* Logo */}
-          <Link to="/" className="flex-shrink-0">
-            <Logo />
-          </Link>
-
-          {/* Navigation - Desktop */}
-          <nav className="hidden md:flex items-center space-x-6">
-            <Link to="/categories" className="font-medium text-gray-700 hover:text-primary-500">
-              Categorías
-            </Link>
-          </nav>
-
-          {/* Actions */}
-          <div className="flex items-center space-x-4">
-            {/* User Account */}
-            <UserMenu />
-
-            {/* Cart */}
-            <Link to="/cart" className="relative text-gray-700 hover:text-primary-500" aria-label="Shopping Cart">
-              <ShoppingBag size={24} />
-              {cart?.items?.length > 0 && (
-                <span className="absolute -top-2 -right-2 bg-secondary-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                  {cart?.items?.length}
-                </span>
-              )}
-            </Link>
-
-            {/* Mobile Menu Toggle */}
-            <button
-              onClick={toggleMobileMenu}
-              className="md:hidden text-gray-700 hover:text-primary-500 focus:outline-none"
-              aria-label={mobileMenuOpen ? "Close Menu" : "Open Menu"}
-            >
-              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-          </div>
-        </div>
-
+  // En Header.tsx
+return (
+  <header className="bg-white shadow-md sticky top-0 z-40">
+    <div className="container-custom flex items-center justify-between h-16 md:h-20"> {/* Ajusta altura si es necesario */}
+      <div className="flex items-center">
+        {/* Logo */}
+        <Logo />
       </div>
-    </header>
-  );
-};
+
+      {/* Contenedor de categorías centrado (visible en pantallas medianas y grandes) */}
+      <div className="flex-grow flex justify-center items-center hidden md:flex"> {/* flex-grow para que ocupe espacio, justify-center para centrar */}
+        <nav className="flex space-x-1 lg:space-x-2"> {/* Ajusta space-x según necesites */}
+          {categories.slice(0, 5).map((category) => ( // Muestra, por ejemplo, las primeras 5
+            <Link
+              key={category.id}
+              to={`/categories/${category.id}`} // O la ruta correcta a tu página de categoría
+              className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-primary-50 hover:text-primary-600 transition-colors duration-150 ease-in-out"
+            >
+              {/* Podrías añadir un ícono si lo tienes en tu data/categories.ts */}
+              {/* category.icon && <category.icon size={16} className="mr-1.5 inline" /> */}
+              {category.name}
+            </Link>
+          ))}
+          {/* Opcional: Enlace para "Ver todas" si tienes muchas categorías */}
+          {categories.length > 5 && (
+            <Link
+              to="/categories" // Página que lista todas las categorías
+              className="px-3 py-2 rounded-md text-sm font-medium text-primary-500 hover:bg-primary-100 transition-colors duration-150 ease-in-out"
+            >
+              Ver todas...
+            </Link>
+          )}
+        </nav>
+      </div>
+
+      <div className="flex items-center">
+        {/* UserMenu, MobileMenu trigger, etc. */}
+        <UserMenu />
+        <div className="md:hidden">
+          {/* <MobileMenu /> Asegúrate que este botón/componente esté aquí */}
+        </div>
+      </div>
+    </div>
+  </header>
+);
 
 export default Header;
