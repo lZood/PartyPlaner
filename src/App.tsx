@@ -10,7 +10,7 @@ import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 
 import MainLayout from './layouts/MainLayout';
-import ScrollToTop from './components/utils/ScrollToTop';
+import ScrollToTop from './utils/ScrollToTop';
 
 // ... (your lazy loaded page imports)
 const HomePage = lazy(() => import('./pages/HomePage'));
