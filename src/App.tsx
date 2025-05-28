@@ -1,33 +1,33 @@
-import React from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-
-// Layouts
-import MainLayout from './layouts/MainLayout';
-import ScrollToTop from './utils/ScrollToTop'; 
-
-// Pages
-import HomePage from './pages/HomePage';
-import CategoriesPage from './pages/CategoriesPage';
-import CategoryPage from './pages/CategoryPage';
-import ServiceListPage from './pages/ServiceListPage';
-import ServiceDetailPage from './pages/ServiceDetailPage';
-import CartPage from './pages/CartPage';
-import AboutPage from './pages/AboutPage';
-import PaymentPage from './pages/PaymentPage';
-import PaymentSuccessPage from './pages/PaymentSuccessPage';
-import SearchResultsPage from './pages/SearchResultsPage';
-import ContactPage from './pages/ContactPage';
-import FaqPage from './pages/FaqPage';
-import BlogPage from './pages/BlogPage';
-import ProfilePage from './pages/ProfilePage';
-import NotFoundPage from './pages/NotFoundPage';
-
-// Context Providers
+// src/App.tsx
+import React, { Suspense, lazy } from 'react';
+import { BrowserRouter as Router, Routes, Route, Outlet } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
-import { ReservationProvider } from './contexts/ReservationContext';
+import { ReservationProvider } from './contexts/ReservationContext'; // Asegúrate que esta importación sea correcta
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import 'slick-carousel/slick/slick.css';
+import 'slick-carousel/slick/slick-theme.css';
+
+import MainLayout from './layouts/MainLayout';
+import ScrollToTop from './components/utils/ScrollToTop'; // <--- IMPORTA EL COMPONENTE
+
+// ... (tus imports de páginas lazy)
+const HomePage = lazy(() => import('./pages/HomePage'));
+const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
+const CategoryPage = lazy(() => import('./pages/CategoryPage'));
+const ServiceDetailPage = lazy(() => import('./pages/ServiceDetailPage'));
+const SearchResultsPage = lazy(() => import('./pages/SearchResultsPage'));
+const CartPage = lazy(() => import('./pages/CartPage'));
+const PaymentPage = lazy(() => import('./pages/PaymentPage'));
+const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const AboutPage = lazy(() => import('./pages/AboutPage')); // Asumiendo que la tienes
+const ContactPage = lazy(() => import('./pages/ContactPage')); // Asumiendo que la tienes
+const BlogPage = lazy(() => import('./pages/BlogPage')); // Asumiendo que la tienes
+const FaqPage = lazy(() => import('./pages/FaqPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+
 
 const App: React.FC = () => {
   return (
