@@ -1075,7 +1075,13 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
                         </div>
                         <p className="text-xs text-gray-500 mb-1.5"> Proveedor: {purchase.service?.provider_name || 'N/A'} </p>
                         <div className="text-xs sm:text-sm text-gray-700 space-y-0.5">
-                          <p><strong>Fecha Evento:</strong> {new Date(purchase.event_date + 'T00:00:00Z').toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                          <p><strong>Fecha Evento:</strong> {(() => {
+  if (!purchase.event_date) return ''; // Manejo por si la fecha no estuviera definida
+  const [year, month, day] = purchase.event_date.split('-').map(Number);
+  // El constructor de Date usa mes 0-indexado (0 para Enero, etc.)
+  const localDate = new Date(year, month - 1, day); 
+  return localDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+})()}</p>
                           <p><strong>Cantidad:</strong> {purchase.quantity}</p>
                            
                           <p className="text-gray-500"><strong>Reservado el:</strong> {new Date(purchase.created_at).toLocaleDateString('es-MX', {day:'numeric', month:'short', year:'numeric'})}</p>
