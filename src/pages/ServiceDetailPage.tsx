@@ -1,22 +1,22 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom'; // Added useNavigate
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import Slider from 'react-slick';
 import {
   Star,
-  Heart as HeartIcon, // Renamed to avoid conflict
+  Heart as HeartIcon,
   CheckCircle,
   Truck,
   CalendarDays as Calendar,
   Clock,
   MinusCircle,
   PlusCircle,
-  Loader2, // Keep as Loader2, will rename if specific instance needed
+  Loader2,
   MapPin,
   Briefcase,
   Users,
   ShoppingBag,
-  ChevronLeft, // Added for calendar
-  ChevronRight // Added for calendar
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { categories as mockCategories } from '../data/categories';
 import { services as mockServicesData } from '../data/services';
@@ -24,11 +24,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import AuthModal from '../components/auth/AuthModal';
 import { AppServiceType, Category as AppCategoryType, Subcategory as AppSubcategoryType, ServiceCoverageArea, ServiceAvailability } from '../types';
-import { createClient, SupabaseClient } from '@supabase/supabase-js'; // Added SupabaseClient
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { useReservation } from '../contexts/ReservationContext';
 import { toast } from 'react-toastify';
 
-const supabase: SupabaseClient = createClient( // Added SupabaseClient type
+const supabase: SupabaseClient = createClient(
   import.meta.env.VITE_SUPABASE_URL!,
   import.meta.env.VITE_SUPABASE_ANON_KEY!
 );
@@ -60,8 +60,6 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availabilit
     for (let day = 1; day <= daysInSelectedMonth; day++) {
       const currentDate = new Date(displayYear, displayMonth, day);
       currentDate.setHours(0, 0, 0, 0);
-      // const dateString = currentDate.toISOString().split('T')[0]; // Original
-      // FIX: Construct dateString from local parts to match selectedEventDateForService format
       const year = currentDate.getFullYear();
       const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
       const dayNum = currentDate.getDate().toString().padStart(2, '0');
@@ -216,19 +214,46 @@ const ServiceDetailPage: React.FC = () => {
           .order('position', { ascending: true });
 
         let mainImageUrl = 'https://placehold.co/600x400?text=No+Imagen';
-        const galleryImageUrls: string[] = [];
+        const otherGalleryImageUrls: string[] = [];
+        
+        // Determinar la imagen principal
         if (galleryData && galleryData.length > 0) {
-          let mainImageRecord = galleryData.find(img => img.is_main_image) || galleryData[0];
+          const mainImageRecord = galleryData.find(img => img.is_main_image);
           if (mainImageRecord?.storage_path) {
             const { data: mainUrlData } = supabase.storage.from('service-images').getPublicUrl(mainImageRecord.storage_path);
             if (mainUrlData?.publicUrl) mainImageUrl = mainUrlData.publicUrl;
+          } else if (galleryData[0]?.storage_path) { // Si no hay 'is_main_image', usar la primera de la galería como principal
+            const { data: firstUrlData } = supabase.storage.from('service-images').getPublicUrl(galleryData[0].storage_path);
+            if (firstUrlData?.publicUrl) mainImageUrl = firstUrlData.publicUrl;
           }
-          galleryData.forEach(img => {
-            if (img.storage_path) {
-              const { data: urlData } = supabase.storage.from('service-images').getPublicUrl(img.storage_path);
-              if (urlData?.publicUrl) galleryImageUrls.push(urlData.publicUrl);
-            }
-          });
+        } else if (serviceData.image_url) { // Fallback a la imageUrl del servicio si no hay galería
+            mainImageUrl = serviceData.image_url;
+        }
+
+
+        // Poblar el resto de la galería, evitando duplicar la imagen principal
+        if (galleryData && galleryData.length > 0) {
+            galleryData.forEach(img => {
+                if (img.storage_path) {
+                    const { data: urlData } = supabase.storage.from('service-images').getPublicUrl(img.storage_path);
+                    // Añadir solo si es una URL válida y no es la imagen principal ya seleccionada
+                    if (urlData?.publicUrl && urlData.publicUrl !== mainImageUrl) {
+                        otherGalleryImageUrls.push(urlData.publicUrl);
+                    }
+                }
+            });
+        }
+        
+        // Construir el array final para la galería del carrusel
+        const finalGalleryUrls = [];
+        if (mainImageUrl && mainImageUrl !== 'https://placehold.co/600x400?text=No+Imagen') {
+            finalGalleryUrls.push(mainImageUrl);
+        }
+        finalGalleryUrls.push(...otherGalleryImageUrls);
+        
+        // Si después de todo, finalGalleryUrls está vacío, añadir el placeholder
+        if (finalGalleryUrls.length === 0) {
+            finalGalleryUrls.push('https://placehold.co/800x600?text=Sin+Imagen+Disponible');
         }
         
         const today = new Date();
@@ -258,7 +283,8 @@ const ServiceDetailPage: React.FC = () => {
         const populatedService: AppServiceType = {
           id: serviceData.id, name: serviceData.name, description: serviceData.description,
           shortDescription: serviceData.short_description, price: serviceData.price,
-          imageUrl: mainImageUrl, gallery: galleryImageUrls.length > 0 ? galleryImageUrls : (mainImageUrl.startsWith('http') ? [mainImageUrl] : []),
+          imageUrl: mainImageUrl, // Sigue siendo útil tener una referencia a la principal
+          gallery: finalGalleryUrls, // Galería para el carrusel
           categoryId: serviceData.category_id, subcategoryId: serviceData.subcategory_id,
           rating: serviceData.rating, reviewCount: serviceData.review_count,
           features: serviceData.features || [], 
@@ -294,7 +320,7 @@ const ServiceDetailPage: React.FC = () => {
       finally { setIsLoading(false); }
     };
     fetchServiceDetails();
-  }, [serviceId, globalSelectedDate, supabase]); 
+  }, [serviceId, globalSelectedDate]); // Removed supabase from dependencies as it's stable
 
   useEffect(() => {
     if (service) { document.title = `${service.name} | CABETG Party Planner`; window.scrollTo(0, 0); }
@@ -313,13 +339,10 @@ const ServiceDetailPage: React.FC = () => {
   const similarServices = service ? mockServicesData.filter((s: AppServiceType) => s.id !== serviceId && s.categoryId === service?.categoryId && s.subcategoryId === service?.subcategoryId).slice(0, 3) : [];
   
   const handleDateSelectionInDetail = (date: Date) => {
-    // date es un objeto Date local, ej: 2025-05-29T00:00:00 (Hora Local)
-    
-    // Construye la cadena YYYY-MM-DD a partir de las partes de la fecha local
     const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0'); // getMonth() es 0-indexado
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`; // Ahora dateStr será "2025-05-29"
+    const dateStr = `${year}-${month}-${day}`;
   
     setSelectedEventDateForService(dateStr);
     toast.info(`Fecha seleccionada: ${date.toLocaleDateString('es-MX', {day: 'numeric', month: 'short'})}`, {position: "bottom-right", autoClose: 2000});
@@ -341,7 +364,7 @@ const ServiceDetailPage: React.FC = () => {
               .eq('date', selectedEventDateForService)
               .single();
 
-          if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means no rows found, which is handled below
+          if (checkError && checkError.code !== 'PGRST116') { 
               throw checkError;
           }
           
@@ -384,7 +407,7 @@ const ServiceDetailPage: React.FC = () => {
     );
   }
   if (!service) { 
-     return (
+    return (
       <div className="container-custom py-16 text-center">
         <h2 className="text-2xl font-bold mb-4">Servicio no encontrado</h2>
         <p className="mb-8 text-gray-600">Lo sentimos, el servicio que buscas no existe o no pudo ser cargado.</p>
@@ -427,9 +450,27 @@ const ServiceDetailPage: React.FC = () => {
              <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               {service.gallery && service.gallery.length > 0 ? (
                 <Slider {...sliderSettings}>
-                  {service.gallery.map((image, index) => ( <div key={index} className="h-72 sm:h-96"><img src={image} alt={`${service.name} - Imagen ${index + 1}`} className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).src = 'https://placehold.co/800x600?text=Error+Imagen')}/></div> ))}
+                  {service.gallery.map((image, index) => (
+                    <div key={index} className="h-72 sm:h-96"> {/* Puedes ajustar esta altura si es necesario */}
+                      <img
+                        src={image}
+                        alt={`${service.name} - Imagen ${index + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => ((e.target as HTMLImageElement).src = 'https://placehold.co/800x600?text=Error+Imagen')}
+                      />
+                    </div>
+                  ))}
                 </Slider>
-              ) : ( <div className="h-72 sm:h-96 flex items-center justify-center bg-gray-100"><img src={service.imageUrl} alt={service.name} className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).src = 'https://placehold.co/800x600?text=Sin+Imagen')}/></div> )}
+              ) : (
+                 // Este bloque ahora es menos probable que se use si la lógica de finalGalleryUrls siempre provee al menos un placeholder
+                <div className="h-72 sm:h-96 flex items-center justify-center bg-gray-100">
+                  <img
+                    src={'https://placehold.co/800x600?text=Sin+Imagen+Disponible'}
+                    alt={service.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -472,7 +513,7 @@ const ServiceDetailPage: React.FC = () => {
                         </div>
                     </div>
                 )}
-              
+                
               <div className="mb-4 sm:mb-6 border-t border-gray-200 pt-4">
                 <h3 className="font-medium mb-2 text-sm text-gray-700">Ubicación y Cobertura</h3>
                 {service.provider_name && <p className="text-xs text-gray-600 flex items-center mb-1"><Briefcase size={13} className="mr-1.5 text-gray-400"/> Proveedor: {service.provider_name}</p>}
@@ -485,7 +526,7 @@ const ServiceDetailPage: React.FC = () => {
                     {service.delivery_radius_km && <p className="text-xs text-gray-600 flex items-center"><Truck size={13} className="mr-1.5 text-gray-400"/> Radio de entrega: {service.delivery_radius_km} km</p>}
                   </>
                 )}
-                 {service.service_type === 'multiple_areas' && service.coverage_areas && service.coverage_areas.length > 0 && (
+                  {service.service_type === 'multiple_areas' && service.coverage_areas && service.coverage_areas.length > 0 && (
                     <div>
                         <p className="text-xs text-gray-600 flex items-center mb-1"><Users size={13} className="mr-1.5 text-gray-400"/> Cubre las siguientes zonas:</p>
                         <ul className="list-disc list-inside pl-4 space-y-0.5">
@@ -509,16 +550,16 @@ const ServiceDetailPage: React.FC = () => {
                   {selectedEventDateForService 
                     ? (() => {
                         const [year, month, day] = selectedEventDateForService.split('-').map(Number);
-                        const localDate = new Date(year, month - 1, day);
+                        const localDate = new Date(year, month - 1, day); // El mes es 0-indexado en el constructor de Date
                         return localDate.toLocaleDateString('es-MX', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
                       })()
                     : "Ninguna. Elige del calendario."}
                 </p>
               </div>
 
-               {totalPrice !== null && (<div className="flex justify-between items-center py-3 mb-4 border-t border-b border-gray-200 mt-6"><div className="text-md font-medium">Total Estimado</div><div className="text-lg font-bold">${totalPrice.toLocaleString('es-MX')}</div></div>)}
-               
-               {itemInCart ? (
+                {totalPrice !== null && (<div className="flex justify-between items-center py-3 mb-4 border-t border-b border-gray-200 mt-6"><div className="text-md font-medium">Total Estimado</div><div className="text-lg font-bold">${totalPrice.toLocaleString('es-MX')}</div></div>)}
+                
+                {itemInCart ? (
                   <Link 
                     to="/cart" 
                     className="btn w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-lg font-medium flex items-center justify-center text-sm shadow-sm"
@@ -545,7 +586,8 @@ const ServiceDetailPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 mt-8">
+        {/* CAMBIO: Reducción de margen superior de mt-8 a mt-4 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 mt-4">
             <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-6">
                 <h2 className="text-xl font-bold mb-4 border-b pb-3 text-gray-800">Descripción del Servicio</h2>
                 <p className="text-gray-700 whitespace-pre-line leading-relaxed text-sm">{service.description}</p>
