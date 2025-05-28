@@ -149,7 +149,7 @@ const PaymentPage: React.FC = () => {
 
       toast.success("¡Reservación realizada con éxito!");
       clearCart();
-      navigate('/payment/success', { state: { reservationDetails: data, eventDate: eventDateForReservation } });
+    navigate('/payment-success', { state: { reservationDetails: data, eventDate: eventDateForReservation } });
 
     } catch (error: any) {
       console.error("Error en el proceso de pago/reservación:", error);
