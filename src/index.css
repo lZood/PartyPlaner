@@ -17,7 +17,7 @@
   }
   
   body {
-    @apply font-body text-gray-800 bg-gray-50;
+    @apply font-body text-gray-800 bg-white;
   }
   
   h1, h2, h3, h4, h5, h6 {

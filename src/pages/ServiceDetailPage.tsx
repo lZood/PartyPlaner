@@ -397,7 +397,7 @@ const ServiceDetailPage: React.FC = () => {
   const subcategoryName = subcategory ? subcategory.name : (service.subcategoryId || 'Subcategoría');
 
   return (
-    <div className="bg-gray-50 py-10 sm:py-12">
+    <div className="bg-white py-10 sm:py-12">
       <AuthModal 
         isOpen={showAuthModal} 
         onClose={() => setShowAuthModal(false)} 

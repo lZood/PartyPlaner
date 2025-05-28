@@ -329,7 +329,7 @@ const SearchResultsPage: React.FC = () => {
 
 
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="bg-white min-h-screen">
       <div className="bg-primary-500 py-8 shadow-md">
         <SearchBar />
       </div>

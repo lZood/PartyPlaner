@@ -171,7 +171,7 @@ const PaymentPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
+    <div className="min-h-screen bg-white py-12">
       <div className="container-custom max-w-4xl">
         <h1 className="text-3xl font-bold mb-8 text-center md:text-left">Proceso de Pago y Reservación</h1>
 

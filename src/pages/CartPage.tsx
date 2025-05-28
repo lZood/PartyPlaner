@@ -184,7 +184,7 @@ const CartPage: React.FC = () => {
   };
 
   return (
-    <div className="bg-gray-50 py-12 min-h-screen">
+    <div className="bg-white py-12 min-h-screen">
       <div className="container-custom">
         <AuthModal
           isOpen={showAuthModal}

@@ -35,7 +35,7 @@ const CategoriesPage: React.FC = () => {
   };
 
   return (
-    <div className="bg-gradient-to-br from-primary-50 via-white to-accent-50 py-12 md:py-16">
+    <div className="bg-white py-12 md:py-16">
       <div className="container-custom">
         <div className="text-center mb-12 md:mb-16">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4">Explora Nuestros Servicios</h1>
