@@ -5,7 +5,7 @@ import 'react-toastify/dist/ReactToastify.css';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
-import ScrollToTop from './components/utils/ScrollToTop'; 
+import ScrollToTop from './utils/ScrollToTop'; 
 
 // Pages
 import HomePage from './pages/HomePage';
