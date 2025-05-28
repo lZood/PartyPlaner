@@ -198,7 +198,7 @@ const ServiceDetailPage: React.FC = () => {
       try {
         const { data: serviceData, error: serviceError } = await supabase
           .from('services')
-          .select('*, service_coverage_areas(*)') 
+          .select('*, service_coverage_areas(*), image_url') // Asegúrate de seleccionar image_url si es el campo correcto para la principal
           .eq('id', serviceId)
           .maybeSingle();
 
@@ -216,27 +216,28 @@ const ServiceDetailPage: React.FC = () => {
         let mainImageUrl = 'https://placehold.co/600x400?text=No+Imagen';
         const otherGalleryImageUrls: string[] = [];
         
-        // Determinar la imagen principal
         if (galleryData && galleryData.length > 0) {
           const mainImageRecord = galleryData.find(img => img.is_main_image);
           if (mainImageRecord?.storage_path) {
             const { data: mainUrlData } = supabase.storage.from('service-images').getPublicUrl(mainImageRecord.storage_path);
             if (mainUrlData?.publicUrl) mainImageUrl = mainUrlData.publicUrl;
-          } else if (galleryData[0]?.storage_path) { // Si no hay 'is_main_image', usar la primera de la galería como principal
+          } else if (galleryData[0]?.storage_path) { 
             const { data: firstUrlData } = supabase.storage.from('service-images').getPublicUrl(galleryData[0].storage_path);
             if (firstUrlData?.publicUrl) mainImageUrl = firstUrlData.publicUrl;
           }
-        } else if (serviceData.image_url) { // Fallback a la imageUrl del servicio si no hay galería
-            mainImageUrl = serviceData.image_url;
+        } else if (serviceData.image_url) { 
+            const { data: mainServiceUrlData } = supabase.storage.from('service-images').getPublicUrl(serviceData.image_url);
+            if (mainServiceUrlData?.publicUrl) {
+                mainImageUrl = mainServiceUrlData.publicUrl;
+            } else { // If serviceData.image_url is not a path but a full URL already
+                if (serviceData.image_url.startsWith('http')) mainImageUrl = serviceData.image_url;
+            }
         }
 
-
-        // Poblar el resto de la galería, evitando duplicar la imagen principal
         if (galleryData && galleryData.length > 0) {
             galleryData.forEach(img => {
                 if (img.storage_path) {
                     const { data: urlData } = supabase.storage.from('service-images').getPublicUrl(img.storage_path);
-                    // Añadir solo si es una URL válida y no es la imagen principal ya seleccionada
                     if (urlData?.publicUrl && urlData.publicUrl !== mainImageUrl) {
                         otherGalleryImageUrls.push(urlData.publicUrl);
                     }
@@ -244,14 +245,12 @@ const ServiceDetailPage: React.FC = () => {
             });
         }
         
-        // Construir el array final para la galería del carrusel
         const finalGalleryUrls = [];
         if (mainImageUrl && mainImageUrl !== 'https://placehold.co/600x400?text=No+Imagen') {
             finalGalleryUrls.push(mainImageUrl);
         }
         finalGalleryUrls.push(...otherGalleryImageUrls);
         
-        // Si después de todo, finalGalleryUrls está vacío, añadir el placeholder
         if (finalGalleryUrls.length === 0) {
             finalGalleryUrls.push('https://placehold.co/800x600?text=Sin+Imagen+Disponible');
         }
@@ -283,8 +282,8 @@ const ServiceDetailPage: React.FC = () => {
         const populatedService: AppServiceType = {
           id: serviceData.id, name: serviceData.name, description: serviceData.description,
           shortDescription: serviceData.short_description, price: serviceData.price,
-          imageUrl: mainImageUrl, // Sigue siendo útil tener una referencia a la principal
-          gallery: finalGalleryUrls, // Galería para el carrusel
+          imageUrl: mainImageUrl, 
+          gallery: finalGalleryUrls, 
           categoryId: serviceData.category_id, subcategoryId: serviceData.subcategory_id,
           rating: serviceData.rating, reviewCount: serviceData.review_count,
           features: serviceData.features || [], 
@@ -320,7 +319,7 @@ const ServiceDetailPage: React.FC = () => {
       finally { setIsLoading(false); }
     };
     fetchServiceDetails();
-  }, [serviceId, globalSelectedDate]); // Removed supabase from dependencies as it's stable
+  }, [serviceId, globalSelectedDate]);
 
   useEffect(() => {
     if (service) { document.title = `${service.name} | CABETG Party Planner`; window.scrollTo(0, 0); }
@@ -445,9 +444,13 @@ const ServiceDetailPage: React.FC = () => {
             </ol>
         </nav>
 
+        {/* --- INICIO DE LA ESTRUCTURA DE GRID PRINCIPAL --- */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-          <div className="lg:col-span-2">
-             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          
+          {/* --- COLUMNA IZQUIERDA: GALERÍA Y DESCRIPCIÓN --- */}
+          <div className="lg:col-span-2 space-y-6"> {/* space-y-6 para separar galería de descripción */}
+            {/* Bloque de la Galería */}
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               {service.gallery && service.gallery.length > 0 ? (
                 <Slider {...sliderSettings}>
                   {service.gallery.map((image, index) => (
@@ -462,7 +465,6 @@ const ServiceDetailPage: React.FC = () => {
                   ))}
                 </Slider>
               ) : (
-                 // Este bloque ahora es menos probable que se use si la lógica de finalGalleryUrls siempre provee al menos un placeholder
                 <div className="h-72 sm:h-96 flex items-center justify-center bg-gray-100">
                   <img
                     src={'https://placehold.co/800x600?text=Sin+Imagen+Disponible'}
@@ -472,9 +474,31 @@ const ServiceDetailPage: React.FC = () => {
                 </div>
               )}
             </div>
-          </div>
 
-          <div className="lg:col-span-1">
+            {/* Bloque de Descripción y Características (Movido aquí) */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+                <h2 className="text-xl font-bold mb-4 border-b pb-3 text-gray-800">Descripción del Servicio</h2>
+                <p className="text-gray-700 whitespace-pre-line leading-relaxed text-sm">{service.description}</p>
+                
+                {service.features && service.features.length > 0 && (
+                    <div className="mt-6 pt-4 border-t">
+                        <h3 className="text-lg font-semibold mb-3 text-gray-700">Características Incluidas</h3>
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                            {service.features.map((feature, index) => (
+                                <li key={index} className="flex items-center text-sm text-gray-600">
+                                    <CheckCircle size={16} className="text-green-500 mr-2 flex-shrink-0" />
+                                    {feature}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </div>
+          </div> {/* --- FIN COLUMNA IZQUIERDA --- */}
+
+          {/* --- COLUMNA DERECHA: DETALLES DE COMPRA Y SERVICIOS SIMILARES --- */}
+          <div className="lg:col-span-1 space-y-6"> {/* space-y-6 para separar bloques en esta columna */}
+            {/* Bloque de Detalles de Compra */}
             <div className="bg-white rounded-xl shadow-lg p-5 sm:p-6">
                 <div className="flex justify-between items-start mb-3 sm:mb-4">
                     <h1 className="text-xl sm:text-2xl font-bold text-gray-800 flex-1 pr-2">{service.name}</h1>
@@ -550,7 +574,7 @@ const ServiceDetailPage: React.FC = () => {
                   {selectedEventDateForService 
                     ? (() => {
                         const [year, month, day] = selectedEventDateForService.split('-').map(Number);
-                        const localDate = new Date(year, month - 1, day); // El mes es 0-indexado en el constructor de Date
+                        const localDate = new Date(year, month - 1, day);
                         return localDate.toLocaleDateString('es-MX', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
                       })()
                     : "Ninguna. Elige del calendario."}
@@ -582,52 +606,30 @@ const ServiceDetailPage: React.FC = () => {
                       })()})`}
                   </button>
                 )}
-            </div>
-          </div>
-        </div>
+            </div> {/* Fin Bloque de Detalles de Compra */}
 
-        {/* CAMBIO: Reducción de margen superior de mt-8 a mt-4 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 mt-4">
-            <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-xl font-bold mb-4 border-b pb-3 text-gray-800">Descripción del Servicio</h2>
-                <p className="text-gray-700 whitespace-pre-line leading-relaxed text-sm">{service.description}</p>
-                
-                {service.features && service.features.length > 0 && (
-                    <div className="mt-6 pt-4 border-t">
-                        <h3 className="text-lg font-semibold mb-3 text-gray-700">Características Incluidas</h3>
-                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-                            {service.features.map((feature, index) => (
-                                <li key={index} className="flex items-center text-sm text-gray-600">
-                                    <CheckCircle size={16} className="text-green-500 mr-2 flex-shrink-0" />
-                                    {feature}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
-            </div>
-            <div className="lg:col-span-1">
-                {similarServices.length > 0 && (
-                    <div className="bg-white rounded-xl shadow-lg p-6">
-                        <h2 className="text-xl font-bold mb-4 text-gray-800">Servicios Similares</h2>
-                        <div className="space-y-4">
-                            {similarServices.map(simService => (
-                                <Link key={simService.id} to={`/service/${simService.id}`} className="group block p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                                    <div className="flex items-start space-x-3">
-                                        <img src={simService.imageUrl} alt={simService.name} className="w-16 h-16 object-cover rounded-md flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/64x64?text=N/A'; }}/>
-                                        <div>
-                                            <h4 className="text-sm font-semibold text-gray-700 group-hover:text-primary-600 line-clamp-2">{simService.name}</h4>
-                                            <p className="text-xs text-gray-500 line-clamp-1">{simService.shortDescription}</p>
-                                            <div className="text-sm font-medium text-primary-500 mt-0.5">{simService.price ? `$${simService.price.toLocaleString('es-MX')}` : 'Cotizar'}</div>
-                                        </div>
+            {/* Bloque de Servicios Similares (Movido aquí, dentro de la columna derecha) */}
+            {similarServices.length > 0 && (
+                <div className="bg-white rounded-xl shadow-lg p-6"> {/* mt-6 o space-y-6 en el padre ya maneja el espacio */}
+                    <h2 className="text-xl font-bold mb-4 text-gray-800">Servicios Similares</h2>
+                    <div className="space-y-4">
+                        {similarServices.map(simService => (
+                            <Link key={simService.id} to={`/service/${simService.id}`} className="group block p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                                <div className="flex items-start space-x-3">
+                                    <img src={simService.imageUrl} alt={simService.name} className="w-16 h-16 object-cover rounded-md flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/64x64?text=N/A'; }}/>
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-gray-700 group-hover:text-primary-600 line-clamp-2">{simService.name}</h4>
+                                        <p className="text-xs text-gray-500 line-clamp-1">{simService.shortDescription}</p>
+                                        <div className="text-sm font-medium text-primary-500 mt-0.5">{simService.price ? `$${simService.price.toLocaleString('es-MX')}` : 'Cotizar'}</div>
                                     </div>
-                                </Link>
-                            ))}
-                        </div>
+                                </div>
+                            </Link>
+                        ))}
                     </div>
-                )}
-            </div>
-        </div>
+                </div>
+            )}
+          </div> {/* --- FIN COLUMNA DERECHA --- */}
+        </div> {/* --- FIN DE LA ESTRUCTURA DE GRID PRINCIPAL --- */}
       </div>
     </div>
   );
