@@ -273,7 +273,67 @@ const ProfilePage: React.FC = () => {
       setImagesToDelete([]); // Limpiar imágenes marcadas para eliminar
       setEditingService(null); // Salir del modo edición
     };
-      
+
+  // Colócala cerca de donde manejas el estado del formulario
+  const handleOpenServiceForm = (serviceToEdit: ProviderService | null = null) => {
+    resetServiceForm(); // Siempre resetea primero
+    if (serviceToEdit) {
+      setEditingService(serviceToEdit); // Entrar en modo edición
+      setServiceFormData({
+        id: serviceToEdit.id,
+        name: serviceToEdit.name || '',
+        categoryId: serviceToEdit.categoryId || '',
+        subcategoryId: serviceToEdit.subcategoryId || '',
+        shortDescription: serviceToEdit.shortDescription || '',
+        description: serviceToEdit.description || '',
+        price: serviceToEdit.price?.toString() || '',
+        features: serviceToEdit.features?.length ? serviceToEdit.features : [''],
+        service_type: serviceToEdit.service_type || 'fixed_location',
+        specific_address: serviceToEdit.specific_address || '',
+        base_latitude: serviceToEdit.base_latitude?.toString() || '',
+        base_longitude: serviceToEdit.base_longitude?.toString() || '',
+        delivery_radius_km: serviceToEdit.delivery_radius_km?.toString() || '',
+        coverage_areas: serviceToEdit.service_coverage_areas?.map(ca => ({ ...ca, temp_id: ca.id, to_delete: false })) || [],
+        default_total_capacity: serviceToEdit.default_total_capacity?.toString() || '10', // Asume un default si no está
+        default_is_available: serviceToEdit.default_is_available === undefined ? true : serviceToEdit.default_is_available,
+      });
+  
+      // Cargar imágenes existentes para previsualización
+      const existingImages = serviceToEdit.service_images || [];
+      const mainImgRecord = existingImages.find(img => img.is_main_image);
+      if (mainImgRecord?.storage_path) {
+        const { data: urlData } = supabase.storage.from('service-images').getPublicUrl(mainImgRecord.storage_path);
+        if (urlData.publicUrl) {
+          setMainImage({
+            preview: urlData.publicUrl,
+            file: new File([], mainImgRecord.storage_path.split('/').pop() || "main_existing.jpg", { type: "image/jpeg" }), // Placeholder
+            isMain: true,
+            id: mainImgRecord.id,
+            storage_path: mainImgRecord.storage_path,
+          });
+        }
+      }
+  
+      const galleryImgRecords = existingImages.filter(img => !img.is_main_image);
+      setGalleryImages(
+        galleryImgRecords.map(img => {
+          const { data: urlData } = supabase.storage.from('service-images').getPublicUrl(img.storage_path);
+          return {
+            preview: urlData.publicUrl || '',
+            file: new File([], img.storage_path.split('/').pop() || "gallery_existing.jpg", { type: "image/jpeg" }), // Placeholder
+            id: img.id,
+            storage_path: img.storage_path,
+            isMain: false,
+          };
+        })
+      );
+    } else {
+      // Asegúrate que para nuevo servicio, el ID esté indefinido
+      setServiceFormData(prev => ({ ...initialServiceFormData, id: undefined }));
+    }
+    setShowServiceForm(true);
+  };
+  
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>, isMain: boolean = false) => {
     const files = e.target.files;
     if (!files) return;
