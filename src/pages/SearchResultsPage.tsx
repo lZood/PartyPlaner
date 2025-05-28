@@ -48,7 +48,7 @@ const SearchResultsPage: React.FC = () => {
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(initialActiveFilters);
 
   useEffect(() => {
-    const fetchSearchResults = async () => {
+const fetchSearchResults = async () => {
       setIsLoading(true);
       setError(null);
       setOriginalServices([]);
@@ -62,7 +62,7 @@ const SearchResultsPage: React.FC = () => {
       const subcategoryParam = searchParams.get('subcategory');
       const dateParam = searchParams.get('date');
 
-      console.log("Parámetros de búsqueda:", { // <-- DEBUGGING LINE ADDED
+      console.log("Parámetros de búsqueda:", { 
         locationTextParam, latParam, lonParam, categoryParam, subcategoryParam, dateParam
       });
 
@@ -113,7 +113,7 @@ const SearchResultsPage: React.FC = () => {
       try {
         const { data: rpcData, error: rpcError } = await supabase.rpc('search_services_rpc', {
           p_category_id: categoryParam || null,
-          p_subcategory_id: subcategoryParam || null,
+          p_subcategory_id: subcategoryParam || null, // Asegúrate que tu RPC maneje este parámetro
           p_search_date: dateParam || null,
           p_location_text: locationTextParam || null,
           p_user_latitude: latParam ? parseFloat(latParam) : null,
@@ -125,33 +125,46 @@ const SearchResultsPage: React.FC = () => {
           throw rpcError;
         }
         
-        console.log("Datos crudos del RPC:", rpcData); // <-- DEBUGGING LINE ADDED
+        console.log("Datos crudos del RPC:", rpcData);
 
         const processedServices = rpcData?.map((service: any) => {
-          console.log("Procesando servicio del RPC:", service); // <-- DEBUGGING LINE ADDED
-          let imageUrl = 'https://placehold.co/300x200?text=Sin+Imagen';
-          if (service.main_image_storage_path) {
-            console.log("Ruta de imagen encontrada en RPC:", service.main_image_storage_path); // <-- DEBUGGING LINE ADDED
-            const { data: urlData } = supabase.storage
-              .from('service-images')
-              .getPublicUrl(service.main_image_storage_path);
-            if (urlData && urlData.publicUrl) { // <-- DEBUGGING LINE MODIFIED (check publicUrl directly)
-              imageUrl = urlData.publicUrl;
-              console.log("URL pública generada:", imageUrl); // <-- DEBUGGING LINE ADDED
-            } else {
-              console.warn("No se pudo obtener urlData.publicUrl para:", service.main_image_storage_path, "Respuesta de getPublicUrl:", urlData); // <-- DEBUGGING LINE MODIFIED
+          console.log("Procesando servicio del RPC:", service); 
+
+          let imageUrl = 'https://placehold.co/300x200?text=Sin+Imagen'; 
+
+          if (service.main_image_storage_path && typeof service.main_image_storage_path === 'string' && service.main_image_storage_path.trim() !== '') {
+            console.log(`[${service.name || service.id}] Ruta de imagen encontrada en RPC: '${service.main_image_storage_path}'`);
+            try {
+              const { data: urlData, error: storageError } = supabase.storage
+                .from('service-images') 
+                .getPublicUrl(service.main_image_storage_path);
+
+              if (storageError) {
+                console.error(`[${service.name || service.id}] Error al obtener URL pública desde Supabase Storage:`, storageError, "Para la ruta:", service.main_image_storage_path);
+                imageUrl = 'https://placehold.co/300x200?text=Error+URL'; 
+              } else if (urlData && urlData.publicUrl) {
+                imageUrl = urlData.publicUrl;
+                console.log(`[${service.name || service.id}] URL pública generada:`, imageUrl);
+              } else {
+                console.warn(`[${service.name || service.id}] No se pudo obtener urlData.publicUrl para la ruta: '${service.main_image_storage_path}'. Respuesta de getPublicUrl:`, urlData);
+                imageUrl = 'https://placehold.co/300x200?text=URL+Inválida'; 
+              }
+            } catch (e) {
+              console.error(`[${service.name || service.id}] EXCEPCIÓN al intentar obtener URL pública para '${service.main_image_storage_path}':`, e);
+              imageUrl = 'https://placehold.co/300x200?text=Excepción+URL';
             }
           } else {
-            console.warn("Servicio sin main_image_storage_path:", service.name || service.id); // <-- DEBUGGING LINE ADDED
+            console.warn(`[${service.name || service.id}] Servicio SIN main_image_storage_path VÁLIDO. Valor recibido:`, service.main_image_storage_path);
           }
+
           return {
-            ...service,
+            ...service, // Mantén todos los demás campos que devuelve el RPC
             id: service.id,
             name: service.name,
             shortDescription: service.short_description,
             description: service.description,
             price: service.price,
-            imageUrl: imageUrl,
+            imageUrl: imageUrl, 
             gallery: [], 
             categoryId: service.category_id,
             subcategoryId: service.subcategory_id,
