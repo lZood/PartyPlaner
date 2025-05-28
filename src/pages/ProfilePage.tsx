@@ -160,6 +160,197 @@ const ProfilePage: React.FC = () => {
   }, [isAuthenticated, navigate, user?.id]);
 
   // Fetch Provider Services
+  import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import {
+  User, Mail, Phone, Plus, Package, Star, Upload, Image as ImageIcon,
+  Loader2, MapPin, Compass, Milestone, SearchCheck, CalendarDays,
+  ShoppingCart, X, Trash2, Edit,
+  Edit3,
+  Calendar as CalendarIconLucide,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle,
+  Heart, 
+  ListChecks
+} from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { categories } from '../data/categories';
+import { AppUser, Reservation, Service as AppServiceType, ServiceCoverageArea } from '../types';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { toast } from 'react-toastify';
+import { geocodeAddressNominatim, GeocodingResult } from '../utils/geocoding';
+import ServiceCard from '../components/search/ServiceCard';
+
+// Define ServiceImage type
+interface ServiceImage {
+  id: string;
+  service_id: string;
+  storage_path: string;
+  is_main_image?: boolean;
+  position?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface ImageUpload {
+  file: File;
+  preview: string;
+  isMain?: boolean;
+  id?: string;
+  storage_path?: string;
+}
+
+interface ServiceFormData {
+  id?: string;
+  name: string;
+  categoryId: string;
+  subcategoryId: string;
+  shortDescription: string;
+  description: string;
+  price: string;
+  features: string[];
+  service_type: 'fixed_location' | 'delivery_area' | 'multiple_areas';
+  specific_address: string;
+  base_latitude?: string;
+  base_longitude?: string;
+  delivery_radius_km?: string;
+  coverage_areas: Array<Partial<ServiceCoverageArea & { temp_id: string | number; id?: string; to_delete?: boolean }>>;
+  default_total_capacity: string;
+  default_is_available: boolean;
+}
+
+interface ProviderService extends AppServiceType {
+  reservations?: Reservation[];
+  service_images?: ServiceImage[];
+  service_coverage_areas?: ServiceCoverageArea[];
+  default_total_capacity?: number; 
+  default_is_available?: boolean;
+}
+
+interface FavoriteItem extends AppServiceType {
+    favorite_id: string;
+    favorited_at: string;
+}
+
+const supabase: SupabaseClient = createClient(
+  import.meta.env.VITE_SUPABASE_URL!,
+  import.meta.env.VITE_SUPABASE_ANON_KEY!
+);
+
+const ProfilePage: React.FC = () => {
+  const { user, isAuthenticated, setUser: setAuthUser, fetchFavorites, favoriteServiceIds } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation(); 
+  
+  const [activeTab, setActiveTab] = useState<'profile' | 'myServices' | 'myPurchases' | 'myFavorites'>('profile');
+  
+  const [showServiceForm, setShowServiceForm] = useState(false);
+  const [editingService, setEditingService] = useState<ProviderService | null>(null);
+  const [mainImage, setMainImage] = useState<ImageUpload | null>(null);
+  const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
+  const [isDeletingService, setIsDeletingService] = useState<string | null>(null);
+  const [galleryImages, setGalleryImages] = useState<ImageUpload[]>([]);
+  const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
+  const [isSubmittingService, setIsSubmittingService] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+
+  const [formData, setFormData] = useState<Partial<AppUser>>({
+    name: '',
+    email: '',
+    phone: '',
+    avatar_url: '',
+  });
+
+  const initialServiceFormData: ServiceFormData = {
+    name: '',
+    categoryId: '',
+    subcategoryId: '',
+    shortDescription: '',
+    description: '',
+    price: '',
+    features: [''],
+    service_type: 'fixed_location',
+    specific_address: '',
+    base_latitude: '',
+    base_longitude: '',
+    delivery_radius_km: '',
+    coverage_areas: [],
+    default_total_capacity: '1',
+    default_is_available: true,
+  };
+
+  const [serviceFormData, setServiceFormData] = useState<ServiceFormData>(initialServiceFormData);
+  const [myServices, setMyServices] = useState<ProviderService[]>([]);
+  const [myPurchases, setMyPurchases] = useState<Reservation[]>([]);
+  const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
+  const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
+  const [isLoadingServices, setIsLoadingServices] = useState(false);
+  const [myFavoriteServices, setMyFavoriteServices] = useState<FavoriteItem[]>([]);
+  const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
+
+  // Moved fetchProviderServicesAndReservations earlier
+  const fetchProviderServicesAndReservations = useCallback(async () => {
+    if (!user?.id) return;
+    setIsLoadingServices(true);
+    try {
+      const { data: servicesData, error: servicesError } = await supabase
+        .from('services')
+        .select('*, service_coverage_areas(*), service_images(*)')
+        .eq('provider_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (servicesError) throw servicesError;
+      if (!servicesData) {
+        setMyServices([]);
+        setIsLoadingServices(false);
+        return;
+      }
+
+      const servicesWithDetails = await Promise.all(
+        servicesData.map(async (service) => {
+          const mainImageRecord = service.service_images?.find((img: ServiceImage) => img.is_main_image) || service.service_images?.[0];
+          let publicUrl = 'https://placehold.co/300x200?text=Sin+Imagen';
+          if (mainImageRecord?.storage_path) {
+            const { data: urlData } = supabase.storage
+              .from('service-images')
+              .getPublicUrl(mainImageRecord.storage_path);
+            if (urlData?.publicUrl) publicUrl = urlData.publicUrl;
+          }
+
+          const { data: reservationsForThisService, error: reservationsError } = await supabase
+            .from('reservations')
+            .select('id, customer_name, event_date, quantity, status, customer_email, customer_phone')
+            .eq('service_id', service.id)
+            .order('event_date', { ascending: true });
+          if (reservationsError) console.error(`Error cargando reservaciones para servicio ${service.id}:`, reservationsError.message);
+
+          return { 
+              ...service, 
+              imageUrl: publicUrl, 
+              reservations: (reservationsForThisService as Reservation[]) || [],
+          } as ProviderService;
+        })
+      );
+      setMyServices(servicesWithDetails);
+    } catch (err: any) {
+      toast.error(`Error al cargar tus servicios y reservaciones: ${err.message}`);
+      setMyServices([]);
+    } finally {
+      setIsLoadingServices(false);
+    }
+  }, [user?.id, supabase]);
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        avatar_url: user.avatar_url || '',
+      });
+    }
+  }, [user]);
    useEffect(() => {
     if (user?.id && (activeTab === 'myServices' || showServiceForm)) { // Fetch if tab is active OR form is shown
         fetchProviderServicesAndReservations();
