@@ -968,9 +968,37 @@ try {
                             <span>({service.reviewCount || 0} reseñas)</span>
                           </div>
 
-                          <div className="mt-4 flex space-x-2 border-t pt-3">
-                            <button onClick={(e) => { e.preventDefault(); toast.info('Función de editar próximamente');}} className="btn-outline text-xs p-1.5 px-2.5 rounded-md flex items-center text-gray-600 hover:text-primary-600 border-gray-300 hover:border-primary-500"><Edit size={14} className="mr-1.5"/> Editar</button>
-                            <button onClick={(e) => { e.preventDefault(); toast.warn('Función de eliminar no implementada');}} className="btn-outline text-xs p-1.5 px-2.5 rounded-md text-red-600 border-red-300 hover:bg-red-50 hover:border-red-500 flex items-center"><Trash2 size={14} className="mr-1.5"/> Eliminar</button>
+                          <div className="mt-4 flex flex-wrap gap-2 border-t pt-3"> {/* Usar flex-wrap y gap para mejor responsividad */}
+                            <button 
+                                onClick={() => handleOpenServiceForm(service)} // MODIFICADO AQUÍ
+                                className="btn-outline text-xs py-1 px-2.5 rounded-md flex items-center text-gray-700 hover:text-primary-600 border-gray-300 hover:border-primary-400 focus:ring-2 focus:ring-primary-200"
+                            >
+                                <Edit3 size={13} className="mr-1"/> Editar
+                            </button>
+                            <button 
+                                onClick={() => handleDeleteService(service.id, service.name)} // MODIFICADO AQUÍ
+                                disabled={isDeletingService === service.id}
+                                className="btn-outline text-xs py-1 px-2.5 rounded-md flex items-center text-red-600 border-red-300 hover:bg-red-50 hover:border-red-500 disabled:opacity-50 focus:ring-2 focus:ring-red-200"
+                            >
+                                {isDeletingService === service.id ? <Loader2 size={13} className="animate-spin mr-1"/> : <Trash2 size={13} className="mr-1"/>}
+                                Eliminar
+                            </button>
+                            <button 
+                                onClick={() => toast.info('Gestión de disponibilidad específica próximamente.')} 
+                                className="btn-outline text-xs py-1 px-2.5 rounded-md flex items-center text-gray-700 hover:text-indigo-600 border-gray-300 hover:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+                            >
+                                <CalendarIconLucide size={13} className="mr-1"/> Disponibilidad
+                            </button>
+                            {/* Botón para expandir/colapsar reservaciones (si no lo tienes ya integrado) */}
+                            {service.reservations && ( // Solo mostrar si hay un array de reservaciones, incluso vacío
+                                <button 
+                                    onClick={() => setExpandedServiceId(expandedServiceId === service.id ? null : service.id)}
+                                    className="btn-outline text-xs py-1 px-2.5 rounded-md flex items-center text-gray-700 hover:text-blue-600 border-gray-300 hover:border-blue-400 focus:ring-2 focus:ring-blue-200"
+                                >
+                                    Reservaciones {service.reservations ? `(${service.reservations.length})` : '(0)'}
+                                    {expandedServiceId === service.id ? <ChevronUp size={14} className="ml-1"/> : <ChevronDown size={14} className="ml-1"/>}
+                                </button>
+                            )}
                           </div>
                         </div>
                     </div>
