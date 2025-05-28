@@ -1,20 +1,34 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom'; // Added useNavigate
 import Slider from 'react-slick';
 import {
-  Star, Heart, CheckCircle, Truck, CalendarDays as Calendar, Clock, MinusCircle, PlusCircle, Loader2, MapPin, Briefcase, Users, ShoppingBag
+  Star,
+  Heart as HeartIcon, // Renamed to avoid conflict
+  CheckCircle,
+  Truck,
+  CalendarDays as Calendar,
+  Clock,
+  MinusCircle,
+  PlusCircle,
+  Loader2, // Keep as Loader2, will rename if specific instance needed
+  MapPin,
+  Briefcase,
+  Users,
+  ShoppingBag,
+  ChevronLeft, // Added for calendar
+  ChevronRight // Added for calendar
 } from 'lucide-react';
 import { categories as mockCategories } from '../data/categories';
-import { services as mockServicesData } from '../data/services'; // Para servicios similares
+import { services as mockServicesData } from '../data/services';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import AuthModal from '../components/auth/AuthModal';
 import { AppServiceType, Category as AppCategoryType, Subcategory as AppSubcategoryType, ServiceCoverageArea, ServiceAvailability } from '../types';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js'; // Added SupabaseClient
 import { useReservation } from '../contexts/ReservationContext';
 import { toast } from 'react-toastify';
 
-const supabase = createClient(
+const supabase: SupabaseClient = createClient( // Added SupabaseClient type
   import.meta.env.VITE_SUPABASE_URL!,
   import.meta.env.VITE_SUPABASE_ANON_KEY!
 );
@@ -22,24 +36,23 @@ const supabase = createClient(
 interface AvailabilityCalendarProps {
   availability: ServiceAvailability[];
   onDateSelect: (date: Date) => void;
-  selectedServiceDate: string | null; // Formato YYYY-MM-DD
-  isLoading?: boolean; // Opcional para mostrar estado de carga
+  selectedServiceDate: string | null;
+  isLoading?: boolean;
 }
 
 const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availability, onDateSelect, selectedServiceDate, isLoading }) => {
   const [displayMonth, setDisplayMonth] = useState(new Date().getMonth());
   const [displayYear, setDisplayYear] = useState(new Date().getFullYear());
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // Normalizar a medianoche para comparaciones
+  today.setHours(0, 0, 0, 0);
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
 
   const renderCalendarDays = () => {
     const daysInSelectedMonth = getDaysInMonth(displayYear, displayMonth);
-    const firstDayOfMonth = new Date(displayYear, displayMonth, 1).getDay(); // Domingo = 0, Lunes = 1...
+    const firstDayOfMonth = new Date(displayYear, displayMonth, 1).getDay();
     const daysArray = [];
 
-    // Espacios en blanco al inicio del mes
     for (let i = 0; i < firstDayOfMonth; i++) {
       daysArray.push(<div key={`blank-${i}`} className="p-1 border text-center h-10 sm:h-12"></div>);
     }
@@ -66,10 +79,6 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availabilit
           cellClass += "bg-red-100 text-red-700 line-through cursor-not-allowed opacity-70";
         }
       } else {
-        // Día futuro sin registro explícito de disponibilidad: podría ser disponible por defecto
-        // o no disponible. Para este caso, lo trataremos como no disponible explícitamente
-        // a menos que la lógica de negocio diga lo contrario (ej. si no hay registro es que está disponible).
-        // Por ahora, si no hay registro, no es seleccionable.
         cellClass += "bg-gray-100 text-gray-500 cursor-not-allowed opacity-70";
       }
       daysArray.push(
@@ -78,7 +87,7 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availabilit
           className={cellClass}
           title={isClickable ? `Seleccionar ${dateString}` : (dayAvailability ? (dayAvailability.isAvailable ? `Lleno (Reservado: ${dayAvailability.bookedCapacity}/${dayAvailability.totalCapacity})` : 'No disponible') : 'No disponible')}
           onClick={() => {
-            if (isClickable) { // Solo llama a onDateSelect si es clickeable
+            if (isClickable) {
               onDateSelect(currentDate);
             }
           }}
@@ -105,7 +114,7 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availabilit
           disabled={isLoading || (displayYear === today.getFullYear() && displayMonth === today.getMonth())}
           className="text-primary-500 p-1.5 rounded-full hover:bg-primary-50 disabled:text-gray-300 disabled:cursor-not-allowed"
         >
-          <ChevronLeft size={20} /> {/* Asumiendo que importas ChevronLeft */}
+          <ChevronLeft size={20} />
         </button>
         <span className="font-medium text-gray-800 text-sm sm:text-base">{monthNames[displayMonth]} {displayYear}</span>
         <button 
@@ -116,7 +125,7 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availabilit
           disabled={isLoading}
           className="text-primary-500 p-1.5 rounded-full hover:bg-primary-50 disabled:text-gray-300"
         >
-          <ChevronRight size={20} /> {/* Asumiendo que importas ChevronRight */}
+          <ChevronRight size={20} />
         </button>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-500 mb-1">
@@ -133,22 +142,49 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availabilit
 
 const ServiceDetailPage: React.FC = () => {
   const { serviceId } = useParams<{ serviceId: string }>();
-  const { cart, addToCart, isInCart } = useCart();
-  const { isAuthenticated } = useAuth();
+  const { cart, addToCart } = useCart(); // Removed isInCart as we'll check with event date
+  const { isAuthenticated, user, addFavorite, removeFavorite, isFavorite } = useAuth(); // Auth context for favorites
   const { selectedDate: globalSelectedDate } = useReservation();
+  const navigate = useNavigate(); // For navigation
   
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  // const [selectedOptions, setSelectedOptions] = useState<string[]>([]); // Not used in current logic, can be added if needed
 
   const [service, setService] = useState<AppServiceType | null>(null);
   const [category, setCategory] = useState<AppCategoryType | null>(null);
   const [subcategory, setSubcategory] = useState<AppSubcategoryType | null>(null);
-  const [coverageAreas, setCoverageAreas] = useState<ServiceCoverageArea[]>([]);
+  // const [coverageAreas, setCoverageAreas] = useState<ServiceCoverageArea[]>([]); // Can be derived from service.coverage_areas
   const [serviceAvailabilities, setServiceAvailabilities] = useState<ServiceAvailability[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAddingToCart, setIsAddingToCart] = useState(false); // Para el botón de añadir
-  const [selectedEventDateForService, setSelectedEventDateForService] = useState<string | null>(null); // Formato YYYY-MM-DD
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [selectedEventDateForService, setSelectedEventDateForService] = useState<string | null>(null);
+  const [isFavoritingDetail, setIsFavoritingDetail] = useState(false); // State for favorite button loading
+
+  const isCurrentlyFavoriteDetail = service ? isFavorite(service.id) : false;
+
+  const handleToggleFavoriteDetail = async () => {
+    if (!service) return;
+    if (!isAuthenticated || !user) {
+      setShowAuthModal(true); 
+      return;
+    }
+    setIsFavoritingDetail(true);
+    try {
+      if (isCurrentlyFavoriteDetail) {
+        await removeFavorite(service.id);
+        toast.info(`${service.name} eliminado de tus favoritos.`);
+      } else {
+        await addFavorite(service.id);
+        toast.success(`${service.name} añadido a tus favoritos!`);
+      }
+    } catch (error) {
+      // Error handling is done in AuthContext's addFavorite/removeFavorite
+    } finally {
+      setIsFavoritingDetail(false);
+    }
+  };
+
 
   useEffect(() => {
     const fetchServiceDetails = async () => {
@@ -156,12 +192,12 @@ const ServiceDetailPage: React.FC = () => {
         setIsLoading(false); setService(null); return;
       }
       setIsLoading(true);
-      setSelectedEventDateForService(null); // Resetear fecha al cambiar de servicio
+      setSelectedEventDateForService(null);
 
       try {
         const { data: serviceData, error: serviceError } = await supabase
           .from('services')
-          .select('*, service_coverage_areas(*)')
+          .select('*, service_coverage_areas(*)') // Fetch coverage areas here
           .eq('id', serviceId)
           .maybeSingle();
 
@@ -208,7 +244,7 @@ const ServiceDetailPage: React.FC = () => {
         
         const mappedAvailabilities: ServiceAvailability[] = (availabilityDataSupabase || []).map((a: any) => ({
             id: a.id,
-            serviceId: a.service_id,
+            serviceId: a.service_id, // Ensure this maps correctly
             date: a.date,
             totalCapacity: a.total_capacity,
             bookedCapacity: a.booked_capacity,
@@ -222,18 +258,20 @@ const ServiceDetailPage: React.FC = () => {
           imageUrl: mainImageUrl, gallery: galleryImageUrls.length > 0 ? galleryImageUrls : (mainImageUrl.startsWith('http') ? [mainImageUrl] : []),
           categoryId: serviceData.category_id, subcategoryId: serviceData.subcategory_id,
           rating: serviceData.rating, reviewCount: serviceData.review_count,
-          features: serviceData.features || [], availability: mappedAvailabilities,
+          features: serviceData.features || [], 
+          availability: mappedAvailabilities, // Use the mapped availabilities
           options: serviceData.options || [], service_type: serviceData.service_type,
           specific_address: serviceData.specific_address, base_latitude: serviceData.base_latitude,
           base_longitude: serviceData.base_longitude, delivery_radius_km: serviceData.delivery_radius_km,
           provider_id: serviceData.provider_id, provider_name: serviceData.provider_name,
           provider_email: serviceData.provider_email, provider_phone: serviceData.provider_phone,
-          is_approved: serviceData.is_approved, coverage_areas: serviceData.service_coverage_areas || [],
+          is_approved: serviceData.is_approved, 
+          coverage_areas: serviceData.service_coverage_areas || [],
         };
         setService(populatedService);
-        setCoverageAreas(serviceData.service_coverage_areas || []);
+        // setCoverageAreas(serviceData.service_coverage_areas || []); // This can be accessed via service.coverage_areas
 
-        if (globalSelectedDate && mappedAvailabilities) {
+        if (globalSelectedDate && mappedAvailabilities.length > 0) { // Check if mappedAvailabilities has items
             const globalDateStr = globalSelectedDate.toISOString().split('T')[0];
             const isAvailableGlobal = mappedAvailabilities.find(
                 (a: ServiceAvailability) => a.date === globalDateStr && a.isAvailable && a.totalCapacity > a.bookedCapacity
@@ -254,7 +292,7 @@ const ServiceDetailPage: React.FC = () => {
       finally { setIsLoading(false); }
     };
     fetchServiceDetails();
-  }, [serviceId, globalSelectedDate]);
+  }, [serviceId, globalSelectedDate]); // Added supabase to dependencies if it's not stable
 
   useEffect(() => {
     if (service) { document.title = `${service.name} | CABETG Party Planner`; window.scrollTo(0, 0); }
@@ -264,15 +302,16 @@ const ServiceDetailPage: React.FC = () => {
   const calculateTotalPrice = (): number | null => {
     if (!service || typeof service.price !== 'number') return null;
     let currentPrice = service.price;
-    // Lógica para opciones adicionales si existen
-    // selectedOptions.forEach(optId => { /* ... modificar currentPrice ... */ });
+    // Logic for selectedOptions can be added here if they affect price
     return currentPrice * quantity;
   };
 
   const totalPrice = calculateTotalPrice();
   const sliderSettings = { dots: true, infinite: true, speed: 500, slidesToShow: 1, slidesToScroll: 1, arrows: true, adaptiveHeight: true };
+  
+  // Corrected: Use AppServiceType for mockServicesData if that's its type
   const similarServices = service ? mockServicesData.filter((s: AppServiceType) => s.id !== serviceId && s.categoryId === service?.categoryId && s.subcategoryId === service?.subcategoryId).slice(0, 3) : [];
-  const handleToggleOption = (optionId: string) => setSelectedOptions((prev) => prev.includes(optionId) ? prev.filter((id) => id !== optionId) : [...prev, optionId]);
+  // const handleToggleOption = (optionId: string) => setSelectedOptions((prev) => prev.includes(optionId) ? prev.filter((id) => id !== optionId) : [...prev, optionId]);
   
   const handleDateSelectionInDetail = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
@@ -281,11 +320,10 @@ const ServiceDetailPage: React.FC = () => {
   };
 
   const handleAddToCart = async () => {
-    if (!isAuthenticated) { setShowAuthModal(true); return; }
+    if (!isAuthenticated || !user) { setShowAuthModal(true); return; }
     if (service) {
       if (!selectedEventDateForService) {
         toast.warn("Por favor, selecciona una fecha de disponibilidad para el servicio desde el calendario.", {position: "bottom-right"});
-        // Podrías hacer scroll al calendario aquí
         return;
       }
       setIsAddingToCart(true);
@@ -295,33 +333,36 @@ const ServiceDetailPage: React.FC = () => {
               .select('total_capacity, booked_capacity, is_available')
               .eq('service_id', service.id)
               .eq('date', selectedEventDateForService)
-              .single(); // Esperamos un solo registro o ninguno
+              .single();
 
-          if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = single row not found
+          if (checkError && checkError.code !== 'PGRST116') {
               throw checkError;
           }
           
           if (!availabilityCheck || !availabilityCheck.is_available || (availabilityCheck.booked_capacity + quantity) > availabilityCheck.total_capacity) {
               toast.error(`El servicio ya no está disponible o excede la capacidad para el ${new Date(selectedEventDateForService + 'T00:00:00Z').toLocaleDateString('es-MX', {day:'numeric', month:'short'})}. Por favor, selecciona otra fecha o ajusta la cantidad.`, {position: "bottom-right", autoClose: 4000});
-              // Opcional: Refrescar la lista de serviceAvailabilities
-              // fetchServiceDetails(); // Podrías llamar a la función que carga todo de nuevo
               setIsAddingToCart(false);
               return;
           }
           
-          addToCart(service, quantity, selectedEventDateForService);
+          addToCart(service, quantity, selectedEventDateForService); // Pass selectedEventDateForService
           toast.success(`${service.name} añadido a tu lista para el ${new Date(selectedEventDateForService + 'T00:00:00Z').toLocaleDateString('es-MX', {day:'numeric', month:'short'})}!`, {position: "bottom-right"});
 
       } catch (error: any) {
           toast.error(`Error al verificar disponibilidad: ${error.message}. Intenta de nuevo.`, {position: "bottom-right"});
-          console.error("Error adding to cart:", error);
       } finally {
           setIsAddingToCart(false);
       }
     }
   };
   
-  const itemInCart = cart.items.find(item => item.service.id === serviceId && item.eventDate === selectedEventDateForService && item.quantity === quantity);
+  // Check if the specific item (service + date + quantity) is in cart for "Ver en mi lista" button
+  const itemInCart = cart.items.find(item => 
+    item.service.id === serviceId && 
+    item.eventDate === selectedEventDateForService &&
+    item.quantity === quantity // Optional: only show "Ver en mi lista" if quantity also matches
+  );
+
 
   if (isLoading && !service) { 
     return (
@@ -351,16 +392,23 @@ const ServiceDetailPage: React.FC = () => {
         onClose={() => setShowAuthModal(false)} 
         onSuccess={() => { 
             setShowAuthModal(false); 
-            if (service && selectedEventDateForService) { 
-                handleAddToCart(); // Volver a intentar añadir al carrito después del login
+            if (service && user && !isCurrentlyFavoriteDetail) { // If modal was for favoriting
+                handleToggleFavoriteDetail();
+            } else if (service && selectedEventDateForService && user) { // If modal was for adding to cart
+                handleAddToCart();
             }
         }} 
         pendingService={service} 
         pendingQuantity={quantity} 
       />
       <div className="container-custom">
-        <nav className="mb-6 sm:mb-8 text-xs sm:text-sm">
-            {/* Breadcrumbs ... */}
+        <nav className="mb-6 sm:mb-8 text-xs sm:text-sm text-gray-500">
+            <ol className="flex flex-wrap items-center">
+              <li className="flex items-center"> <Link to="/" className="hover:text-primary-500">Inicio</Link> <span className="mx-2">/</span> </li>
+              {category && <li className="flex items-center"> <Link to={`/category/${category.id}`} className="hover:text-primary-500">{categoryName}</Link> <span className="mx-2">/</span> </li>}
+              {subcategory && <li className="flex items-center"> <Link to={`/category/${category?.id}/${subcategory.id}`} className="hover:text-primary-500">{subcategoryName}</Link> <span className="mx-2">/</span> </li>}
+              <li className="text-primary-500 font-medium truncate max-w-[200px] sm:max-w-xs">{service.name}</li>
+            </ol>
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
@@ -377,11 +425,23 @@ const ServiceDetailPage: React.FC = () => {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-lg p-5 sm:p-6">
                 <div className="flex justify-between items-start mb-3 sm:mb-4">
-                    <h1 className="text-xl sm:text-2xl font-bold text-gray-800">{service.name}</h1>
-                    <button className="text-gray-400 hover:text-pink-500 p-1 -mr-1 mt-0.5" aria-label="Añadir a favoritos"><Heart size={22} /></button>
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-800 flex-1 pr-2">{service.name}</h1>
+                    <button 
+                        onClick={handleToggleFavoriteDetail}
+                        disabled={isFavoritingDetail}
+                        className={`p-1.5 rounded-full transition-all duration-200 ease-in-out transform hover:scale-110
+                                    ${isFavoritingDetail ? 'cursor-not-allowed' : (isCurrentlyFavoriteDetail ? 'hover:bg-pink-50' : 'hover:bg-gray-100') }
+                                    focus:outline-none focus:ring-2 focus:ring-pink-300`}
+                        aria-label={isCurrentlyFavoriteDetail ? "Quitar de favoritos" : "Añadir a favoritos"}
+                    >
+                        <HeartIcon 
+                            size={22} 
+                            className={`${isCurrentlyFavoriteDetail ? 'text-pink-500 fill-current' : 'text-gray-400 hover:text-pink-500'}`}
+                        />
+                    </button>
                 </div>
                 <div className="flex items-center mb-3 sm:mb-4 text-sm">
-                    <div className="flex text-yellow-400">{[...Array(5)].map((_, i) => ( <Star key={i} size={16} fill={i < Math.floor(service.rating) ? "currentColor" : "none"} strokeWidth={i < Math.floor(service.rating) ? 0 : 1.5}/> )) }</div>
+                    <div className="flex text-yellow-400">{[...Array(5)].map((_, i) => ( <Star key={i} size={16} fill={i < Math.floor(service.rating) ? "currentColor" : "none"} strokeWidth={i < Math.floor(service.rating) ? 0 : 1.5} className={i < Math.floor(service.rating) ? "text-yellow-400" : "text-gray-300"}/> )) }</div>
                     <span className="text-gray-600 ml-1.5">{service.rating.toFixed(1)} ({service.reviewCount} reseñas)</span>
                 </div>
                 <div className="mb-4 sm:mb-6">
@@ -401,18 +461,35 @@ const ServiceDetailPage: React.FC = () => {
                         </div>
                     </div>
                 )}
-                {/* Opciones Adicionales (si aplica) */}
               
               <div className="mb-4 sm:mb-6 border-t border-gray-200 pt-4">
                 <h3 className="font-medium mb-2 text-sm text-gray-700">Ubicación y Cobertura</h3>
-                {/* ... (JSX de ubicación como antes, con clases de texto más pequeñas si es necesario) ... */}
+                {service.provider_name && <p className="text-xs text-gray-600 flex items-center mb-1"><Briefcase size={13} className="mr-1.5 text-gray-400"/> Proveedor: {service.provider_name}</p>}
+                {service.service_type === 'fixed_location' && service.specific_address && (
+                  <p className="text-xs text-gray-600 flex items-center"><MapPin size={13} className="mr-1.5 text-gray-400"/> {service.specific_address}</p>
+                )}
+                {service.service_type === 'delivery_area' && (
+                  <>
+                    {service.specific_address && <p className="text-xs text-gray-600 flex items-center mb-0.5"><MapPin size={13} className="mr-1.5 text-gray-400"/> Base: {service.specific_address}</p>}
+                    {service.delivery_radius_km && <p className="text-xs text-gray-600 flex items-center"><Truck size={13} className="mr-1.5 text-gray-400"/> Radio de entrega: {service.delivery_radius_km} km</p>}
+                  </>
+                )}
+                 {service.service_type === 'multiple_areas' && service.coverage_areas && service.coverage_areas.length > 0 && (
+                    <div>
+                        <p className="text-xs text-gray-600 flex items-center mb-1"><Users size={13} className="mr-1.5 text-gray-400"/> Cubre las siguientes zonas:</p>
+                        <ul className="list-disc list-inside pl-4 space-y-0.5">
+                            {service.coverage_areas.slice(0, 3).map(area => <li key={area.id || area.area_name} className="text-xs text-gray-500">{area.area_name}{area.city ? `, ${area.city}`: ''}</li>)}
+                            {service.coverage_areas.length > 3 && <li className="text-xs text-gray-400">...y más.</li>}
+                        </ul>
+                    </div>
+                )}
               </div>
 
               <AvailabilityCalendar 
                 availability={serviceAvailabilities} 
                 onDateSelect={handleDateSelectionInDetail}
                 selectedServiceDate={selectedEventDateForService}
-                isLoading={isLoading}
+                isLoading={isLoading} // Pass isLoading from service detail fetch
               />
               
               <div className="mt-4 mb-5 p-3 border border-gray-200 rounded-lg bg-gray-50 shadow-sm">
@@ -430,10 +507,7 @@ const ServiceDetailPage: React.FC = () => {
                   <Link 
                     to="/cart" 
                     className="btn w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-lg font-medium flex items-center justify-center text-sm shadow-sm"
-                  >
-                    <ShoppingBag size={16} className="mr-2"/>
-                    Ver en mi lista ({new Date(itemInCart.eventDate + 'T00:00:00Z').toLocaleDateString('es-MX', {day: 'numeric', month: 'short'})})
-                  </Link>
+                  > <ShoppingBag size={16} className="mr-2"/> Ver en mi lista ({new Date(itemInCart.eventDate + 'T00:00:00Z').toLocaleDateString('es-MX', {day: 'numeric', month: 'short'})}) </Link>
                 ) : (
                   <button 
                     onClick={handleAddToCart} 
@@ -449,23 +523,50 @@ const ServiceDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Description, Features, Reviews, Similar Services */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 mt-8">
-            <div className="lg:col-span-2">
-                {/* ... (Descripción y Características JSX como antes) ... */}
+            <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-6">
+                <h2 className="text-xl font-bold mb-4 border-b pb-3 text-gray-800">Descripción del Servicio</h2>
+                <p className="text-gray-700 whitespace-pre-line leading-relaxed text-sm">{service.description}</p>
+                
+                {service.features && service.features.length > 0 && (
+                    <div className="mt-6 pt-4 border-t">
+                        <h3 className="text-lg font-semibold mb-3 text-gray-700">Características Incluidas</h3>
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                            {service.features.map((feature, index) => (
+                                <li key={index} className="flex items-center text-sm text-gray-600">
+                                    <CheckCircle size={16} className="text-green-500 mr-2 flex-shrink-0" />
+                                    {feature}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
             </div>
             <div className="lg:col-span-1">
-                {/* ... (Servicios Similares JSX como antes) ... */}
+                {similarServices.length > 0 && (
+                    <div className="bg-white rounded-xl shadow-lg p-6">
+                        <h2 className="text-xl font-bold mb-4 text-gray-800">Servicios Similares</h2>
+                        <div className="space-y-4">
+                            {similarServices.map(simService => (
+                                <Link key={simService.id} to={`/service/${simService.id}`} className="group block p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                                    <div className="flex items-start space-x-3">
+                                        <img src={simService.imageUrl} alt={simService.name} className="w-16 h-16 object-cover rounded-md flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/64x64?text=N/A'; }}/>
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-gray-700 group-hover:text-primary-600 line-clamp-2">{simService.name}</h4>
+                                            <p className="text-xs text-gray-500 line-clamp-1">{simService.shortDescription}</p>
+                                            <div className="text-sm font-medium text-primary-500 mt-0.5">{simService.price ? `$${simService.price.toLocaleString('es-MX')}` : 'Cotizar'}</div>
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
       </div>
     </div>
   );
 };
-
-// Temporal: Añadir ChevronLeft y ChevronRight si no están en lucide-react o si quieres usar SVGs simples
-const ChevronLeft: React.FC<{size?: number, className?: string}> = ({size=24, className=""}) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="15 18 9 12 15 6"></polyline></svg>);
-const ChevronRight: React.FC<{size?: number, className?: string}> = ({size=24, className=""}) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="9 18 15 12 9 6"></polyline></svg>);
-
 
 export default ServiceDetailPage;
