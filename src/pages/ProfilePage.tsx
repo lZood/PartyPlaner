@@ -265,6 +265,15 @@ const ProfilePage: React.FC = () => {
     }
   }, [activeTab, user?.id, supabase]); // user?.id y supabase como dependencias
 
+  // Colócala antes de handleOpenServiceForm o donde organices tus helpers
+    const resetServiceForm = () => {
+      setServiceFormData(initialServiceFormData);
+      setMainImage(null);
+      setGalleryImages([]);
+      setImagesToDelete([]); // Limpiar imágenes marcadas para eliminar
+      setEditingService(null); // Salir del modo edición
+    };
+      
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>, isMain: boolean = false) => {
     const files = e.target.files;
     if (!files) return;
