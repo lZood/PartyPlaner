@@ -660,10 +660,6 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
         rating: editingService?.rating || 0,
         review_count: editingService?.reviewCount || 0,
     };
-    if (serviceFormData.default_total_capacity) {
-        servicePayload.default_total_capacity = parseInt(serviceFormData.default_total_capacity, 10);
-    }
-    servicePayload.default_is_available = serviceFormData.default_is_available;
 
 
     // 4. Guardar/Actualizar Servicio Principal
