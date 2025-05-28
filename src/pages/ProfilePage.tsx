@@ -3,7 +3,12 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import {
   User, Mail, Phone, Plus, Package, Star, Upload, Image as ImageIcon,
   Loader2, MapPin, Compass, Milestone, SearchCheck, CalendarDays,
-  ShoppingCart, X, Trash2, Edit // Edit para el futuro
+  ShoppingCart, X, Trash2, Edit, // Mantén Edit si lo usas en otro lado
+  Edit3, // <--- AÑADIDO para el botón de editar servicio
+  Calendar as CalendarIconLucide, // <--- AÑADIDO para el botón de disponibilidad
+  ChevronDown, // <--- AÑADIDO para expandir/colapsar reservaciones
+  ChevronUp, // <--- AÑADIDO para expandir/colapsar reservaciones
+  AlertTriangle // <--- AÑADIDO (útil para alertas, aunque no se use aún explícitamente)
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { categories } from '../data/categories';
