@@ -180,7 +180,7 @@ const CartPage: React.FC = () => {
         toast.warn("Aún se está verificando la disponibilidad, por favor espera.");
         return;
     }
-    navigate('/payment', { state: { eventDate: cartEventDate } });
+    navigate('/checkout', { state: { eventDate: cartEventDate } });
   };
 
   return (
