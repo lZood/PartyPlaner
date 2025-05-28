@@ -17,8 +17,7 @@ const CategoryIcon: React.FC<{ iconId: string | undefined; className?: string }>
       return <Candy className={className} />;
     case 'disposables': return <PackageIcon className={className} />;
     case 'venues': return <Home className={className} />
-    // Añade más casos según los IDs de tus categorías
-    default: return <ShoppingBag className={className} />; // Un ícono por defecto
+    default: return <ShoppingBag className={className} />;
   }
 };
 
@@ -33,10 +32,6 @@ const CategoriesPage: React.FC = () => {
   const toggleCategory = (categoryId: string) => {
     setExpandedCategory(expandedCategory === categoryId ? null : categoryId);
   };
-
-  // Es buena práctica tener slugs amigables para URL, pero usaremos los IDs directamente como en tu código original.
-  // Si tus IDs no son amigables para URL (ej. contienen espacios, ñ, etc.), considera crear slugs.
-  // Por ejemplo: const createSlug = (text: string) => text.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
 
   return (
     <div className="bg-white py-12 md:py-16">
@@ -67,13 +62,10 @@ const CategoriesPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center">
-                  {/* El enlace "Ver Todo en {category.name}" puede ir a una página que liste todo de la categoría principal,
-                      o también a la página de búsqueda solo con el filtro de categoría.
-                      Por ahora lo dejo como estaba, pero podrías querer cambiarlo a:
-                      to={`/searchresultpage?categoria=${category.id}`}
-                  */}
+                  {/* Ajusta este enlace si quieres que también vaya a /search */}
                   <Link
-                    to={`/category/${category.id}`} // O considera: `/searchresultpage?categoria=${category.id}`
+                    to={`/search?category=${encodeURIComponent(category.id)}`} // Ejemplo si quieres que "Ver todo" también use /search
+                    // to={`/category/${category.id}`} // Como estaba antes, si tienes una página específica por categoría
                     onClick={(e) => e.stopPropagation()}
                     className="text-sm text-primary-600 hover:text-primary-700 font-medium py-2 px-4 rounded-lg hover:bg-primary-50 transition-colors mr-3"
                   >
@@ -95,23 +87,16 @@ const CategoriesPage: React.FC = () => {
                   {category.subcategories && category.subcategories.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {category.subcategories.map((subcategory) => {
-                        // Construimos la URL para la página de resultados de búsqueda
-                        // Usamos category.id y subcategory.id como parámetros
-                        // Si tus IDs no son URL-friendly, considera usar slugs
-                        // const categorySlug = createSlug(category.id); // o category.slug si lo tienes
-                        // const subcategorySlug = createSlug(subcategory.id); // o subcategory.slug
-
-                        const searchPath = `/searchresultpage?categoria=${encodeURIComponent(category.id)}&subcategoria=${encodeURIComponent(subcategory.id)}`;
+                        // URL correcta: /search?category=...&subcategory=...
+                        const searchPath = `/search?category=${encodeURIComponent(category.id)}&subcategory=${encodeURIComponent(subcategory.id)}`;
 
                         return (
                           <Link
                             key={subcategory.id}
-                            to={searchPath} // <--- AQUÍ EL CAMBIO PRINCIPAL
+                            to={searchPath} // <--- CORRECCIÓN APLICADA AQUÍ
                             className="group block p-4 bg-white rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 ease-in-out"
                           >
                             <div className="flex items-center">
-                              {/* Podrías tener iconos para subcategorías también */}
-                              {/* <CategoryIcon iconId={subcategory.icon} className="w-6 h-6 text-secondary-500 mr-3" /> */}
                               <div>
                                 <h4 className="font-medium text-gray-800 group-hover:text-secondary-600 transition-colors">
                                   {subcategory.name}
