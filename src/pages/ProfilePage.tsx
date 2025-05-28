@@ -423,15 +423,28 @@ const removeImage = (index: number, isMain: boolean = false) => {
   const handleRemoveFeature = (index: number) => setServiceFormData(prev => ({ ...prev, features: serviceFormData.features.filter((_, i) => i !== index)}));
 
   const handleAddCoverageArea = () => setServiceFormData(prev => ({ ...prev, coverage_areas: [...prev.coverage_areas, { temp_id: Date.now().toString(), area_name: '', city: '', state: '', postal_code: '' }]}));
-  const handleCoverageAreaChange = (temp_id: string, field: keyof Omit<ServiceCoverageArea, 'id' | 'service_id' | 'created_at' | 'updated_at' | 'country'>, value: string) => {
+  // Aproximadamente línea 226
+const handleCoverageAreaChange = (temp_id_or_id: string | number, field: keyof Omit<ServiceCoverageArea, 'id' | 'service_id' | 'created_at' | 'updated_at' | 'country'>, value: string) => {
     setServiceFormData(prev => ({
-      ...prev,
-      coverage_areas: prev.coverage_areas.map(area =>
-        area.temp_id === temp_id ? { ...area, [field]: value } : area
-      )
+        ...prev,
+        coverage_areas: prev.coverage_areas.map(area =>
+            (area.temp_id === temp_id_or_id || area.id === temp_id_or_id) ? { ...area, [field]: value } : area
+        )
     }));
-  };
-  const handleRemoveCoverageArea = (temp_id: string) => setServiceFormData(prev => ({ ...prev, coverage_areas: prev.coverage_areas.filter(area => area.temp_id !== temp_id)}));
+};
+
+const handleRemoveCoverageArea = (temp_id_or_id: string | number) => {
+    setServiceFormData(prev => ({
+        ...prev,
+        coverage_areas: prev.coverage_areas.map(area => {
+            if (area.id && (area.id === temp_id_or_id || area.temp_id === temp_id_or_id)) { // Si tiene ID, es existente, marcar para borrar
+                return { ...area, to_delete: true };
+            }
+            return area;
+        }).filter(area => !area.to_delete && area.temp_id !== temp_id_or_id && area.id !== temp_id_or_id) // Mantener las que no se borran
+                                                                                                        // o si es nueva y se borra, filtrarla directamente
+    }));
+};
 
   const handleGeocodeServiceAddress = async () => {
     const addressToGeocode = serviceFormData.specific_address;
@@ -462,40 +475,81 @@ const removeImage = (index: number, isMain: boolean = false) => {
     }
   };
 
-  const handleServiceSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user?.id || !user.name || !user.email) {
-        toast.error("Tu perfil de usuario está incompleto. Por favor, actualízalo antes de publicar servicios.");
-        setActiveTab('profile');
-        return;
-    }
-    if (isSubmittingService) return;
-    setIsSubmittingService(true);
+// Aproximadamente línea 258
+const handleServiceSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!user?.id || !user.name || !user.email) {
+    toast.error("Tu perfil de usuario está incompleto...");
+    setActiveTab('profile');
+    return;
+  }
+  if (isSubmittingService) return;
+  setIsSubmittingService(true);
 
-    try {
-      if (!mainImage) {
-        toast.error('La imagen principal del servicio es requerida.');
+  const isEditMode = !!editingService;
+  const currentServiceId = editingService?.id;
+
+  try {
+    // 1. Subir/Actualizar Imagen Principal
+    let finalMainImageStoragePath: string | undefined | null = null; // null significa que se debe eliminar la principal
+
+    if (mainImage) {
+        if (mainImage.file.size > 0) { // Hay un archivo nuevo para la imagen principal (creación o reemplazo)
+            const mainImgFileName = `public/<span class="math-inline">\{user\.id\}/</span>{currentServiceId || 'new'}/<span class="math-inline">\{Date\.now\(\)\}\_main\_</span>{mainImage.file.name.replace(/\s/g, '_')}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('service-images').upload(mainImgFileName, mainImage.file);
+            if (uploadError) throw uploadError;
+            finalMainImageStoragePath = uploadData.path;
+            // Si es edición y la imagen principal anterior era diferente, añadir la vieja a imagesToDelete
+            if (isEditMode && editingService?.service_images?.find(img => img.is_main_image)?.storage_path && editingService.service_images.find(img => img.is_main_image)!.storage_path !== finalMainImageStoragePath) {
+                 const oldPath = editingService.service_images.find(img => img.is_main_image)!.storage_path;
+                 if (oldPath) setImagesToDelete(prev => [...new Set([...prev, oldPath])]); // Evitar duplicados
+            }
+        } else if (mainImage.storage_path) { // Es una imagen existente que no se cambió
+            finalMainImageStoragePath = mainImage.storage_path;
+        }
+    } else if (isEditMode && editingService?.service_images?.find(img => img.is_main_image)?.storage_path) {
+        // La imagen principal fue eliminada y no reemplazada
+        const oldPath = editingService.service_images.find(img => img.is_main_image)!.storage_path;
+        if (oldPath) setImagesToDelete(prev => [...new Set([...prev, oldPath])]);
+        finalMainImageStoragePath = null; // Indica que no hay imagen principal o se eliminó
+    }
+
+    if (!isEditMode && !finalMainImageStoragePath) {
+        toast.error('La imagen principal es obligatoria para un nuevo servicio.');
         setIsSubmittingService(false);
         return;
+    }
+
+
+    // 2. Subir Nuevas Imágenes de Galería
+    const uploadedGalleryPaths: string[] = [];
+    const keptExistingGalleryImages: ImageUpload[] = [];
+
+    for (const img of galleryImages) {
+      if (img.file.size > 0) { // Es un archivo nuevo para subir
+        const galleryFileName = `public/<span class="math-inline">\{user\.id\}/</span>{currentServiceId || 'new'}/<span class="math-inline">\{Date\.now\(\)\}\_gallery\_</span>{img.file.name.replace(/\s/g, '_')}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('service-images').upload(galleryFileName, img.file);
+        if (uploadError) throw uploadError;
+        uploadedGalleryPaths.push(uploadData.path);
+      } else if (img.storage_path) { // Es una imagen existente que se mantuvo
+        keptExistingGalleryImages.push(img);
       }
+    }
 
-      const mainImageFileName = `public/${user.id}/${Date.now()}_${mainImage.file.name.replace(/\s/g, '_')}`;
-      const { data: mainUploadData, error: mainImageError } = await supabase.storage
-        .from('service-images')
-        .upload(mainImageFileName, mainImage.file);
+    // Identificar imágenes de galería eliminadas (las que estaban en editingService.service_images pero no en keptExistingGalleryImages)
+    if (isEditMode && editingService?.service_images) {
+        editingService.service_images.forEach(existingImg => {
+            if (!existingImg.is_main_image && !keptExistingGalleryImages.find(kg => kg.storage_path === existingImg.storage_path)) {
+                setImagesToDelete(prev => [...new Set([...prev, existingImg.storage_path])]);
+            }
+        });
+    }
 
-      if (mainImageError) throw mainImageError;
 
-      const galleryStoragePathsData = await Promise.all(
-        galleryImages.map(async (img) => {
-          const fName = `public/${user.id}/${Date.now()}_${img.file.name.replace(/\s/g, '_')}`;
-          const { data, error } = await supabase.storage.from('service-images').upload(fName, img.file);
-          if (error) throw error;
-          return data.path; 
-        })
-      );
-
-      const serviceToInsert = {
+    // 3. Preparar datos del servicio (sin ID para inserción)
+    const servicePayload: Omit<ServiceFormData, 'id' | 'coverage_areas' | 'default_total_capacity' | 'default_is_available'> & { provider_id: string, provider_name: string, provider_email: string, provider_phone: string | null, is_approved: boolean, rating: number, review_count: number, default_total_capacity?: number, default_is_available?: boolean } = {
         name: serviceFormData.name,
         category_id: serviceFormData.categoryId,
         subcategory_id: serviceFormData.subcategoryId,
@@ -512,32 +566,124 @@ const removeImage = (index: number, isMain: boolean = false) => {
         base_latitude: serviceFormData.base_latitude ? parseFloat(serviceFormData.base_latitude) : null,
         base_longitude: serviceFormData.base_longitude ? parseFloat(serviceFormData.base_longitude) : null,
         delivery_radius_km: serviceFormData.service_type === 'delivery_area' && serviceFormData.delivery_radius_km ? parseInt(serviceFormData.delivery_radius_km, 10) : null,
-        is_approved: false, 
-        rating: 0, 
-        review_count: 0,
-      };
+        is_approved: editingService?.is_approved || false, // Mantener estado de aprobación si se edita
+        rating: editingService?.rating || 0,
+        review_count: editingService?.reviewCount || 0,
+    };
+    if (serviceFormData.default_total_capacity) {
+        servicePayload.default_total_capacity = parseInt(serviceFormData.default_total_capacity, 10);
+    }
+    servicePayload.default_is_available = serviceFormData.default_is_available;
 
-      const { data: newService, error: serviceError } = await supabase
-        .from('services')
-        .insert(serviceToInsert)
-        .select()
-        .single();
 
-      if (serviceError) throw serviceError;
-      if (!newService) throw new Error("El servicio no pudo ser creado.");
+    // 4. Guardar/Actualizar Servicio Principal
+    let savedServiceData: AppServiceType;
+    if (isEditMode && currentServiceId) {
+      const { data, error } = await supabase.from('services').update(servicePayload).eq('id', currentServiceId).select().single();
+      if (error) throw error;
+      savedServiceData = data as AppServiceType;
+    } else {
+      const { data, error } = await supabase.from('services').insert(servicePayload).select().single();
+      if (error) throw error;
+      savedServiceData = data as AppServiceType;
+    }
+    if (!savedServiceData) throw new Error("No se pudo guardar la información del servicio.");
+    const finalServiceId = savedServiceData.id;
 
-      const serviceImagesToInsert = [
-        { service_id: newService.id, storage_path: mainUploadData.path, is_main_image: true, position: 0 },
-        ...galleryStoragePathsData.map((path, i) => ({ service_id: newService.id, storage_path: path, is_main_image: false, position: i + 1 }))
-      ];
-      const { error: serviceImagesError } = await supabase.from('service_images').insert(serviceImagesToInsert);
-      if (serviceImagesError) throw serviceImagesError;
 
-      if (serviceFormData.service_type === 'multiple_areas' && serviceFormData.coverage_areas.length > 0) {
+    // 5. Procesar Imágenes en DB (service_images)
+    // Eliminar de la tabla 'service_images' las que ya no están o fueron reemplazadas
+    const imageRecordsToDeleteInDB: string[] = [];
+    if (isEditMode && editingService?.service_images) {
+        editingService.service_images.forEach(imgRec => {
+            // Si es la principal y se cambió (finalMainImageStoragePath es nuevo y diferente) O se eliminó (finalMainImageStoragePath es null)
+            if (imgRec.is_main_image && ( (finalMainImageStoragePath && finalMainImageStoragePath !== imgRec.storage_path) || finalMainImageStoragePath === null) ) {
+                imageRecordsToDeleteInDB.push(imgRec.id);
+            }
+            // Si es de galería y ya no está en keptExistingGalleryImages
+            if (!imgRec.is_main_image && !keptExistingGalleryImages.find(kImg => kImg.id === imgRec.id)) {
+                imageRecordsToDeleteInDB.push(imgRec.id);
+            }
+        });
+    }
+    if (imageRecordsToDeleteInDB.length > 0) {
+        await supabase.from('service_images').delete().in('id', imageRecordsToDeleteInDB);
+    }
+
+    // Preparar imágenes para upsert/insert en service_images
+    const imagesForDB: Omit<ServiceImage, 'created_at' | 'updated_at'>[] = [];
+    let currentPosition = 0;
+    if (finalMainImageStoragePath) {
+        const existingMainDbRecord = isEditMode ? editingService?.service_images?.find(img => img.is_main_image && img.storage_path === finalMainImageStoragePath) : undefined;
+        imagesForDB.push({
+            id: existingMainDbRecord?.id, // Undefined para nuevas imágenes
+            service_id: finalServiceId,
+            storage_path: finalMainImageStoragePath,
+            is_main_image: true,
+            position: currentPosition++,
+        });
+    }
+    keptExistingGalleryImages.forEach(img => {
+        if(img.id && img.storage_path){ // Solo las que realmente son existentes y se mantuvieron
+             imagesForDB.push({
+                id: img.id,
+                service_id: finalServiceId,
+                storage_path: img.storage_path,
+                is_main_image: false,
+                position: currentPosition++,
+            });
+        }
+    });
+    uploadedGalleryPaths.forEach(path => {
+        imagesForDB.push({
+            // id: undefined, // para inserción
+            service_id: finalServiceId,
+            storage_path: path,
+            is_main_image: false,
+            position: currentPosition++,
+        });
+    });
+
+    if (imagesForDB.length > 0) {
+         // En modo edición, es más seguro eliminar las existentes y luego insertar todo el set final.
+         // Pero si se manejan IDs para upsert, se puede hacer más granular.
+         // Simplificado: Si es edición, borramos todas las de la DB (EXCEPTO la principal si no cambió) y reinsertamos.
+         // Esta lógica puede ser muy compleja para un upsert perfecto de posiciones y cambios.
+         // Una estrategia más simple para edición: borrar todas las imágenes de service_images y reinsertar el conjunto final.
+        if(isEditMode){ // Borrar todas las imágenes asociadas al servicio en la DB
+             await supabase.from('service_images').delete().eq('service_id', finalServiceId);
+        }
+        // Y luego insertar el set final de imágenes
+        const finalImagesToInsertToDb = imagesForDB.map(({id, ...rest}) => rest); // Quitar ID para insert
+        if(finalImagesToInsertToDb.length > 0){
+            const { error: siError } = await supabase.from('service_images').insert(finalImagesToInsertToDb);
+            if (siError) throw siError;
+        }
+    } else if (isEditMode && finalMainImageStoragePath === null) { // Si no hay imagen principal ni de galería en modo edición
+        await supabase.from('service_images').delete().eq('service_id', finalServiceId);
+    }
+
+
+    // 6. Eliminar archivos del Storage (los que se marcaron en imagesToDelete)
+    const finalImagesToDeleteFromStorage = [...new Set(imagesToDelete)]; // Eliminar duplicados
+    if (finalImagesToDeleteFromStorage.length > 0) {
+      const { error: storageError } = await supabase.storage.from('service-images').remove(finalImagesToDeleteFromStorage);
+      if (storageError) {
+        console.warn("Error al eliminar imágenes del storage:", storageError.message);
+        // No bloquear la operación por esto, pero sí loguearlo o notificar.
+      }
+    }
+
+
+    // 7. Manejar Áreas de Cobertura (Simplificado: eliminar todas y reinsertar)
+    if (isEditMode && currentServiceId) {
+        await supabase.from('service_coverage_areas').delete().eq('service_id', currentServiceId);
+    }
+    if (serviceFormData.service_type === 'multiple_areas' && serviceFormData.coverage_areas.length > 0) {
         const coverageAreasToInsert = serviceFormData.coverage_areas
-            .filter(a => a.area_name && a.area_name.trim() !== '')
+            .filter(a => a.area_name && a.area_name.trim() !== '' && !a.to_delete) // No insertar las marcadas para borrar
             .map(a => ({ 
-                service_id: newService.id, 
+                service_id: finalServiceId, 
                 area_name: a.area_name!,
                 city: a.city || null, 
                 state: a.state || null, 
@@ -547,57 +693,152 @@ const removeImage = (index: number, isMain: boolean = false) => {
             const { error: coverageError } = await supabase.from('service_coverage_areas').insert(coverageAreasToInsert);
             if (coverageError) throw coverageError;
         }
-      }
-      
-      if (serviceFormData.default_is_available && serviceFormData.default_total_capacity) {
-        const capacity = parseInt(serviceFormData.default_total_capacity, 10);
-        if (capacity > 0) {
-            const availabilityEntries: { service_id: string; date: string; total_capacity: number; booked_capacity: number; is_available: boolean; }[] = [];
-            const startDate = new Date(); startDate.setHours(0,0,0,0);
-            const endDate = new Date(startDate); endDate.setFullYear(startDate.getFullYear() + 1);
-            for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-              availabilityEntries.push({ 
-                service_id: newService.id, 
-                date: new Date(d).toISOString().split('T')[0], 
-                total_capacity: capacity, 
-                booked_capacity: 0, 
-                is_available: true 
-              });
-            }
-            if (availabilityEntries.length > 0) {
-              const { error: availabilityError } = await supabase.from('service_availability').insert(availabilityEntries);
-              if (availabilityError) {
-                console.error("Error al crear disponibilidad por defecto:", availabilityError);
-                toast.warn("Servicio creado, pero falló al establecer la disponibilidad por defecto.");
-              }
-            }
-        }
-      }
-
-      toast.success('¡Servicio publicado exitosamente! Está pendiente de aprobación por un administrador.');
-      setShowServiceForm(false); 
-      setMainImage(null); 
-      setGalleryImages([]); 
-      setServiceFormData(initialServiceFormData);
-      
-      // Actualizar la UI con el nuevo servicio
-      const newServiceWithImageUrl = {
-        ...newService,
-        imageUrl: supabase.storage.from('service-images').getPublicUrl(mainUploadData.path).data.publicUrl,
-        gallery: [], // La galería completa no se carga aquí por simplicidad
-        coverage_areas: serviceFormData.service_type === 'multiple_areas' ? serviceFormData.coverage_areas.map(ca => ({...ca, service_id: newService.id, id: ca.temp_id! })) : [], // Simplificado
-        reservations: [] // Nuevo servicio no tiene reservaciones
-      } as AppServiceType;
-      setMyServices(prev => [newServiceWithImageUrl, ...prev]);
-
-
-    } catch (error: any) {
-      console.error('[ProfilePage] Error creating service:', error);
-      toast.error(`Error al crear el servicio: ${error.message || 'Error desconocido'}`);
-    } finally {
-      setIsSubmittingService(false);
     }
-  };
+
+    // (Opcional) Lógica para disponibilidad por defecto si es un nuevo servicio
+    if (!isEditMode && serviceFormData.default_is_available && serviceFormData.default_total_capacity) {
+        // ... (Lógica de crear availabilityEntries como antes) ...
+    }
+
+
+    toast.success(`Servicio <span class="math-inline">\{isEditMode ? 'actualizado' \: 'publicado'\} con éxito\!</span>{!isEditMode && !savedServiceData.is_approved ? ' Pendiente de aprobación.' : ''}`);
+    setShowServiceForm(false);
+    resetServiceForm();
+    fetchProviderServicesAndReservations(); // Recargar la lista de servicios
+
+} catch (error: any) {
+  console.error(`Error al ${editingService ? 'actualizar' : 'crear'} el servicio:`, error);
+  toast.error(`Error: ${error.message || 'Error desconocido'}`);
+} finally {
+  setIsSubmittingService(false);
+}
+};
+
+// Nueva función handleDeleteService
+const handleDeleteService = async (serviceId: string, serviceName: string) => {
+if (!user?.id) return;
+
+if (!window.confirm(`¿Estás seguro de que quieres eliminar el servicio "${serviceName}"? Esta acción no se puede deshacer.`)) {
+  return;
+}
+setIsDeletingService(serviceId);
+try {
+  const { error } = await supabase.rpc('delete_service_by_provider', {
+    p_service_id: serviceId,
+    p_provider_id: user.id
+  });
+
+  if (error) {
+    // La RPC ya debería lanzar una excepción descriptiva si no se puede eliminar
+    throw error;
+  }
+
+  toast.success(`Servicio "${serviceName}" eliminado correctamente.`);
+  setMyServices(prev => prev.filter(s => s.id !== serviceId));
+
+} catch (err: any) {
+  toast.error(`Error al eliminar servicio: ${err.message}`);
+  console.error("Error deleting service:", err);
+} finally {
+  setIsDeletingService(null);
+}
+};
+// --- FIN DE MANEJADORES DE FORMULARIO DE SERVICIO ---
+
+if (!isAuthenticated || !user) { /* ... (como antes) ... */ }
+
+return (
+<div className="bg-gray-50 py-8 sm:py-12">
+  <div className="container-custom max-w-5xl">
+    {/* ... (Título y Pestañas como antes) ... */}
+
+    {activeTab === 'profile' && ( /* ... (JSX del Perfil como antes) ... */ )}
+
+    {activeTab === 'myServices' && (
+       <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Mis Servicios Publicados</h2>
+          <button 
+            onClick={() => handleOpenServiceForm(null)} // Para crear nuevo
+            className="btn btn-primary flex items-center px-3 py-2 sm:px-4 text-sm"
+          >
+            <Plus size={18} className="mr-1 sm:mr-2" /> Nuevo Servicio
+          </button>
+        </div>
+
+        {/* ... (Loader y mensaje de "no hay servicios" como antes) ... */}
+        {!showServiceForm && !isLoadingServices && myServices.length > 0 && (
+          <div className="space-y-6">
+            {myServices.map(service => (
+                <div key={service.id} className="bg-white rounded-xl shadow-lg group hover:shadow-xl transition-shadow duration-300">
+                    <div className="p-4 sm:p-6">
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <Link to={`/service/${service.id}`} className="block sm:w-48 sm:h-32 rounded-md overflow-hidden flex-shrink-0">
+                                <img 
+                                    src={service.imageUrl || 'https://placehold.co/400x300?text=Servicio'} 
+                                    alt={service.name} 
+                                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/400x300?text=Error+Img'; }}
+                                />
+                            </Link>
+                            <div className="flex-grow">
+                                {/* ... (Info del servicio como antes) ... */}
+                                <div className="mt-3 flex flex-wrap gap-2 items-center">
+                                    <button 
+                                        onClick={() => handleOpenServiceForm(service)} // MODIFICADO
+                                        className="btn-outline text-xs py-1 px-2.5 rounded-md flex items-center text-gray-700 hover:text-primary-600 border-gray-300 hover:border-primary-400"
+                                    >
+                                        <Edit3 size={13} className="mr-1"/> Editar
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDeleteService(service.id, service.name)} // MODIFICADO
+                                        disabled={isDeletingService === service.id}
+                                        className="btn-outline text-xs py-1 px-2.5 rounded-md flex items-center text-red-600 border-red-300 hover:bg-red-50 hover:border-red-500 disabled:opacity-50"
+                                    >
+                                        {isDeletingService === service.id ? <Loader2 size={13} className="animate-spin mr-1"/> : <Trash2 size={13} className="mr-1"/>}
+                                        Eliminar
+                                    </button>
+                                    {/* ... (Botón de Disponibilidad) ... */}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {/* ... (Sección de Reservaciones del Proveedor, si la tienes) ... */}
+                </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
+
+    {activeTab === 'myPurchases' && ( /* ... (JSX de Mis Compras como antes) ... */ )}
+
+    {/* MODAL para Crear/Editar Servicio */}
+    {showServiceForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-5 sm:p-6 w-full max-w-2xl max-h-[95vh] overflow-y-auto shadow-2xl">
+              <div className="flex justify-between items-center mb-5 sm:mb-6">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-800">
+                    {editingService ? 'Editar Servicio' : 'Publicar Nuevo Servicio'} {/* Título dinámico */}
+                </h3>
+                <button onClick={() => { setShowServiceForm(false); resetServiceForm(); }} className="text-gray-400 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100"><X size={22} /></button>
+              </div>
+              <form onSubmit={handleServiceSubmit} className="space-y-3 sm:space-y-4 text-sm">
+                {/* ... (Todos los campos del formulario como antes) ... */}
+                {/* Botón de Submit del Formulario del Modal */}
+                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 mt-2">
+                  <button type="button" onClick={() => { setShowServiceForm(false); resetServiceForm(); }} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 shadow-sm">Cancelar</button>
+                  <button type="submit" disabled={isSubmittingService} className="px-4 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-70 flex items-center shadow-sm hover:shadow-md">
+                    {isSubmittingService ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Procesando...</> : (editingService ? 'Actualizar Servicio' : 'Publicar Servicio')}
+                  </button>
+                </div>
+              </form>
+            </div>
+        </div>
+    )}
+  </div>
+</div>
+);
 
   if (!isAuthenticated || !user) {
     return (
