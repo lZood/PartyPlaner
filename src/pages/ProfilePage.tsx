@@ -10,7 +10,7 @@ import { categories } from '../data/categories';
 import { AppUser, Reservation, Service as AppServiceType, ServiceCoverageArea } from '../types';
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'react-toastify';
-import { geocodeAddressNominatim, GeocodingResult } from './geocoding';
+import { geocodeAddressNominatim, GeocodingResult } from '../utils/geocoding';
 
 interface ImageUpload {
   file: File;
