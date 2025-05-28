@@ -9,8 +9,8 @@ interface LocationPickerProps {
 const LocationPicker: React.FC<LocationPickerProps> = ({ onSelect, onClose }) => {
   const popularLocations = [
     { id: 'guasave', name: 'Guasave', state: 'Sinaloa' },
+        { id: 'guadalajara', name: 'Guadalajara', state: 'Jalisco' },
     { id: 'cdmx', name: 'Ciudad de México', state: 'CDMX' },
-    { id: 'guadalajara', name: 'Guadalajara', state: 'Jalisco' },
     { id: 'monterrey', name: 'Monterrey', state: 'Nuevo León' },
     { id: 'cancun', name: 'Cancún', state: 'Quintana Roo' },
   ];
