@@ -1030,7 +1030,54 @@ const ProfilePage: React.FC = () => {
                         </div>
                     </div>
                     <div> <label className="block text-xs font-medium">Imagen Principal*</label><div className={`relative border-2 border-dashed rounded-lg p-3 ${mainImage ? 'border-green-500' : 'border-gray-300'}`}><input type="file" accept="image/*" onChange={(e) => handleImageSelect(e, true)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>{mainImage ? (<div className="relative group"><img src={mainImage.preview} alt="Preview" className="w-full h-32 object-cover rounded-md"/><button type="button" onClick={() => removeImage(0, true)} className="absolute top-1 right-1"><Trash2 size={14}/></button></div>) : (<div className="text-center py-8"><Upload className="mx-auto h-8 w-8" /><p className="mt-1 text-xs">Clic o arrastra (Max 5MB)</p></div>)}</div></div>
-                    <div> <label className="block text-xs font-medium">Galería (hasta 5)</label><div className="grid grid-cols-3 sm:grid-cols-5 gap-2">{galleryImages.map((img, idx) => <div key={img.id || idx} className="relative group aspect-square"><img src={img.preview} alt={`Galería ${idx+1}`} className="w-full h-full object-cover rounded"/><button type="button" onClick={() => removeImage(img.storage_path || idx, false)} className="absolute top-1 right-1"><Trash2 size={12}/></button></div>)}{galleryImages.length < 5 && <label className="border-2 border-dashed p-2 h-full min-h-[6rem] flex items-center justify-center cursor-pointer aspect-square"><input type="file" multiple accept="image/*" onChange={(e) => handleImageSelect(e, false)} className="absolute inset-0 opacity-0"/><div className="text-center"><ImageIcon className="mx-auto h-6 w-6"/><p className="mt-1 text-xs">Añadir</p></div></label>}</div></div>
+                    <div>
+  <label className="block text-xs font-medium text-gray-700 mb-1">
+    Galería de Imágenes (hasta 5 adicionales)
+  </label>
+  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+    {galleryImages.map((img, idx) => (
+      <div key={img.id || idx} className="relative group aspect-square">
+        <img
+          src={img.preview}
+          alt={`Galería ${idx + 1}`}
+          className="w-full h-full object-cover rounded-md border border-gray-200"
+        />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent event bubbling
+            removeImage(img.storage_path || idx, false);
+          }}
+          className="absolute top-1 right-1 bg-white/80 hover:bg-white rounded-full p-0.5 shadow-md transition-opacity opacity-0 group-hover:opacity-100 z-10"
+        >
+          <Trash2 size={12} className="text-red-500" />
+        </button>
+      </div>
+    ))}
+    {galleryImages.length < 5 && (
+      // This is the clickable area for adding new gallery images.
+      // We ensure it doesn't incorrectly capture clicks from other elements.
+      <div className="relative border-2 border-dashed border-gray-300 rounded-md h-full min-h-[6rem] flex items-center justify-center hover:border-primary-500 transition-colors aspect-square">
+        <label
+          htmlFor="galleryUpload" // Link label to the input
+          className="absolute inset-0 w-full h-full flex flex-col items-center justify-center cursor-pointer p-2" // Make label cover the div
+        >
+          <ImageIcon className="mx-auto h-6 w-6 text-gray-400" />
+          <p className="mt-1 text-xs text-gray-500 text-center">Añadir</p>
+        </label>
+        <input
+          id="galleryUpload" // ID for the label to point to
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          onChange={(e) => handleImageSelect(e, false)}
+          className="opacity-0 w-0 h-0" // Keep it completely hidden and out of layout flow
+          onClick={(e) => e.stopPropagation()} // Stop click from propagating further if needed
+        />
+      </div>
+    )}
+  </div>
+</div>
                     <div> <label className="block text-xs font-medium">Características Clave</label>{serviceFormData.features.map((feat, idx) => <div key={idx} className="flex gap-1 mb-1.5"><input type="text" value={feat} onChange={e=>handleFeatureChange(idx, e.target.value)} className="flex-1 p-2 border rounded-md" placeholder={`Característica ${idx+1}`}/>{serviceFormData.features.length > 1 && <button type="button" onClick={()=>handleRemoveFeature(idx)}><Trash2 size={14}/></button>}</div>)}<button type="button" onClick={handleAddFeature} className="text-xs text-primary-600"><Plus size={14} className="mr-1 inline"/>Agregar</button></div>
                     <div className="flex justify-end space-x-3 pt-4 border-t mt-2">
                       <button type="button" onClick={() => {setShowServiceForm(false); resetServiceForm();}} className="px-4 py-2 text-sm border rounded-lg">Cancelar</button>
