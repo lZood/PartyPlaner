@@ -1,49 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom'; // Importa Link
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
-import { CreditCard, Calendar as CalendarIcon, Lock, Loader2, AlertCircle, ShoppingBag } from 'lucide-react'; // Renombrado Calendar a CalendarIcon
+import {
+  CreditCard, CalendarDays as CalendarIcon, Lock, Loader2, AlertCircle, ShoppingBag, Info
+} from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-toastify';
-import { AppUser, Reservation } from '../types'; // Asegúrate que Reservation esté definida en tus tipos.
+import { Reservation } from '../types'; // Asegúrate que Reservation esté definida en tus tipos
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL!,
   import.meta.env.VITE_SUPABASE_ANON_KEY!
 );
 
-// Definición básica de Reservation si no la tienes en types/index.ts
-// interface Reservation {
-//   id?: string; // Opcional, se genera en la DB
-//   user_id: string;
-//   service_id: string;
-//   event_date: string; // Formato YYYY-MM-DD
-//   quantity: number;
-//   status: string; // 'pending', 'confirmed', 'cancelled', etc.
-//   total_price: number;
-//   customer_name: string;
-//   customer_email: string;
-//   customer_phone: string;
-//   event_location: string;
-//   comments?: string;
-//   // created_at y updated_at se manejan por la DB
-// }
-
-
 const PaymentPage: React.FC = () => {
   const navigate = useNavigate();
-  const locationHook = useLocation(); // Renombrado para evitar conflicto con la variable eventLocation
+  const locationHook = useLocation();
   const { cart, clearCart } = useCart();
   const { user, isAuthenticated } = useAuth();
 
-  // Extraer datos pasados a través del estado de la navegación (ej. desde ServiceDetailPage o CartPage)
   const passedState = locationHook.state as {
-    serviceId?: string;
-    eventDate?: string; // Debe ser YYYY-MM-DD
-    quantity?: number;
-    // Otros campos necesarios como customer_name, etc., si no se toman del perfil de usuario
+    eventDate?: string; // Esperamos YYYY-MM-DD
   } || {};
 
+  const eventDateForReservation = passedState.eventDate;
 
   const [paymentFormData, setPaymentFormData] = useState({
     cardNumber: '',
@@ -53,9 +34,9 @@ const PaymentPage: React.FC = () => {
   });
 
   const [customerDetails, setCustomerDetails] = useState({
-    customer_name: user?.name || '',
-    customer_email: user?.email || '',
-    customer_phone: user?.phone || '',
+    customer_name: '',
+    customer_email: '',
+    customer_phone: '',
     event_location: '',
     comments: '',
   });
@@ -72,6 +53,16 @@ const PaymentPage: React.FC = () => {
       }));
     }
   }, [user]);
+
+  useEffect(() => {
+    if (cart.items.length > 0 && !eventDateForReservation) {
+        toast.warn("No se especificó una fecha para el evento. Por favor, vuelve al carrito para seleccionarla.", {
+            autoClose: 5000,
+            onClick: () => navigate('/cart')
+        });
+    }
+  }, [cart.items, eventDateForReservation, navigate]);
+
 
   const handlePaymentFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -95,38 +86,28 @@ const PaymentPage: React.FC = () => {
     setCustomerDetails(prev => ({ ...prev, [name]: value }));
   };
 
-  // Determinar los ítems a reservar y el precio total
-  // Esto es crucial y dependerá de tu flujo: ¿se paga por todo el carrito o un solo servicio?
-  // Este ejemplo asume que se paga por todos los ítems en el carrito.
   const itemsToReserve = cart.items;
   const subtotal = itemsToReserve.reduce((sum, item) => sum + (item.service.price || 0) * item.quantity, 0);
   const iva = subtotal * 0.16;
   const totalAmount = subtotal + iva;
 
-  // Determinar la fecha del evento. Es crucial.
-  // Si todos los ítems del carrito son para la misma fecha, es simple.
-  // Si no, necesitarás una lógica más compleja o permitir solo reservas para una fecha a la vez.
-  // Aquí se asume que passedState.eventDate tiene la fecha correcta o hay una lógica para obtenerla.
-  const eventDateForReservation = passedState.eventDate; // Asegúrate que esté en formato YYYY-MM-DD
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated || !user) {
       toast.error("Debes iniciar sesión para realizar una reservación.");
-      navigate('/'); // Redirige o muestra modal de login
+      navigate('/');
       return;
     }
 
     if (itemsToReserve.length === 0) {
-      toast.warn("Tu carrito está vacío. Agrega servicios para continuar.");
+      toast.warn("Tu lista de cotización está vacía.");
       navigate('/');
       return;
     }
     
     if (!eventDateForReservation) {
-        toast.error("La fecha del evento no está especificada. Por favor, selecciónala.");
-        // Podrías redirigir a una página para seleccionar fecha o mostrar un modal.
+        toast.error("La fecha del evento no está especificada. Por favor, selecciónala desde tu lista de cotización.");
+        navigate('/cart');
         return;
     }
     
@@ -134,22 +115,22 @@ const PaymentPage: React.FC = () => {
         toast.error("Por favor, especifica la dirección del evento.");
         return;
     }
-
+    if (!customerDetails.customer_name.trim() || !customerDetails.customer_email.trim() || !customerDetails.customer_phone.trim()){
+        toast.error("Por favor, completa tus datos de contacto.");
+        return;
+    }
 
     setIsProcessing(true);
-
-    // Aquí iría la lógica de procesamiento de pago real (ej. Stripe, PayPal)
-    // Simularemos un pago exitoso
     await new Promise(resolve => setTimeout(resolve, 2000)); 
 
     try {
       const reservationsToInsert: Omit<Reservation, 'id' | 'created_at' | 'updated_at'>[] = itemsToReserve.map(item => ({
         user_id: user.id,
         service_id: item.service.id,
-        event_date: eventDateForReservation, // Asegúrate que esto sea YYYY-MM-DD
+        event_date: eventDateForReservation,
         quantity: item.quantity,
-        status: 'confirmed', // O 'pending_payment' si el pago es asíncrono
-        total_price: (item.service.price || 0) * item.quantity, // Precio del ítem individual
+        status: 'confirmed',
+        total_price: (item.service.price || 0) * item.quantity,
         customer_name: customerDetails.customer_name,
         customer_email: customerDetails.customer_email,
         customer_phone: customerDetails.customer_phone,
@@ -167,8 +148,8 @@ const PaymentPage: React.FC = () => {
       }
 
       toast.success("¡Reservación realizada con éxito!");
-      clearCart(); // Limpia el carrito después de una reservación exitosa
-      navigate('/payment/success', { state: { reservationDetails: data } });
+      clearCart();
+      navigate('/payment/success', { state: { reservationDetails: data, eventDate: eventDateForReservation } });
 
     } catch (error: any) {
       console.error("Error en el proceso de pago/reservación:", error);
@@ -178,49 +159,43 @@ const PaymentPage: React.FC = () => {
     }
   };
   
-  if (!isAuthenticated) {
-     // Podrías mostrar un mensaje o redirigir si no está autenticado, aunque el submit ya lo maneja.
-  }
-
   if (itemsToReserve.length === 0 && !isProcessing) {
     return (
         <div className="container-custom max-w-md mx-auto text-center py-20">
             <ShoppingBag size={64} className="mx-auto text-gray-400 mb-6" />
-            <h1 className="text-2xl font-bold mb-4">Tu carrito está vacío</h1>
-            <p className="text-gray-600 mb-8">No tienes servicios seleccionados para pagar.</p>
-            <Link to="/" className="btn btn-primary">Explorar servicios</Link>
+            <h1 className="text-2xl font-bold mb-4">Tu lista de cotización está vacía</h1>
+            <p className="text-gray-600 mb-8">No tienes servicios seleccionados para proceder al pago.</p>
+            <Link to="/" className="btn btn-primary py-2 px-6">Explorar servicios</Link>
         </div>
     )
   }
 
-
   return (
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="container-custom max-w-4xl">
-        <h1 className="text-3xl font-bold mb-8 text-center md:text-left">Proceso de Pago</h1>
+        <h1 className="text-3xl font-bold mb-8 text-center md:text-left">Proceso de Pago y Reservación</h1>
 
-        {!eventDateForReservation && (
-            <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4">
+        {!eventDateForReservation && itemsToReserve.length > 0 && (
+            <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4 rounded-md shadow">
                 <div className="flex">
                     <div className="flex-shrink-0">
-                        <AlertCircle className="h-5 w-5 text-yellow-400" />
+                        <AlertCircle className="h-5 w-5 text-red-500" />
                     </div>
                     <div className="ml-3">
-                        <p className="text-sm text-yellow-700">
-                            No se ha especificado una fecha para el evento. Por favor, asegúrate de seleccionarla antes de proceder.
-                            {/* Podrías agregar un Link para ir a seleccionar la fecha */}
-                        </p>
+                        <h3 className="text-sm font-medium text-red-800">Fecha del Evento Requerida</h3>
+                        <div className="mt-2 text-sm text-red-700">
+                            <p>No se ha especificado una fecha para el evento. Por favor, vuelve a tu <Link to="/cart" className="font-medium underline hover:text-red-600">lista de cotización</Link> para seleccionar una fecha antes de proceder.</p>
+                        </div>
                     </div>
                 </div>
             </div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          {/* Payment Form & Customer Details */}
           <div className="lg:col-span-3 bg-white rounded-xl shadow-md p-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Detalles del Cliente y Evento</h2>
+                <h2 className="text-xl font-semibold mb-4 border-b pb-2 text-gray-700">Detalles del Cliente y Evento</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="customer_name" className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo*</label>
@@ -242,7 +217,7 @@ const PaymentPage: React.FC = () => {
                         id="event_date_display" 
                         value={eventDateForReservation ? new Date(eventDateForReservation + 'T00:00:00').toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) : 'No especificada'} 
                         readOnly 
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed"
+                        className={`w-full px-3 py-2 border rounded-md bg-gray-100 cursor-not-allowed ${!eventDateForReservation ? 'border-red-300 text-red-700 placeholder-red-400' : 'border-gray-300'}`}
                     />
                   </div>
                 </div>
@@ -257,7 +232,7 @@ const PaymentPage: React.FC = () => {
               </section>
               
               <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Información de Pago (Simulado)</h2>
+                <h2 className="text-xl font-semibold mb-4 border-b pb-2 text-gray-700">Información de Pago (Simulado)</h2>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Número de Tarjeta</label>
                   <div className="relative">
@@ -274,7 +249,7 @@ const PaymentPage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Expiración</label>
                     <div className="relative">
                       <input type="text" name="expiryDate" required value={paymentFormData.expiryDate} onChange={handlePaymentFormChange} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300" placeholder="MM/YY"/>
-                      <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /> {/* Renombrado */}
+                      <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     </div>
                   </div>
                   <div>
@@ -306,12 +281,24 @@ const PaymentPage: React.FC = () => {
             </form>
           </div>
 
-          {/* Order Summary */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl shadow-md p-6 sticky top-28"> {/* Added sticky top-28 for better UX on scroll */}
-              <h2 className="text-xl font-bold mb-6 border-b pb-2">Resumen de la Reservación</h2>
+            <div className="bg-white rounded-xl shadow-md p-6 sticky top-28">
+              <h2 className="text-xl font-bold mb-4 border-b pb-2 text-gray-700">Resumen de la Reservación</h2>
+              {eventDateForReservation && (
+                <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-400 rounded">
+                  <div className="flex items-start">
+                    <Info size={20} className="text-blue-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-700">Fecha del Evento Seleccionada:</p>
+                      <p className="text-sm text-blue-600">
+                        {new Date(eventDateForReservation + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
               {itemsToReserve.length > 0 ? (
-                <div className="space-y-3 max-h-60 overflow-y-auto pr-2 mb-4"> {/* Scroll for many items */}
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-2 mb-4">
                 {itemsToReserve.map((item) => (
                   <div key={item.service.id} className="flex justify-between items-start py-2 border-b last:border-b-0">
                     <div>
@@ -326,7 +313,7 @@ const PaymentPage: React.FC = () => {
                 ))}
               </div>
               ) : (
-                 <p className="text-sm text-gray-500 mb-4">No hay servicios en tu carrito.</p>
+                 <p className="text-sm text-gray-500 mb-4">No hay servicios para mostrar.</p>
               )}
               
               <div className="border-t pt-4 mt-4 space-y-2">
