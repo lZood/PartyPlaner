@@ -615,241 +615,273 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  const handleServiceSubmit = async (e: React.FormEvent) => {
+const handleServiceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id || !user.name || !user.email) {
-      toast.error("Perfil de usuario incompleto."); setActiveTab('profile'); return;
+        toast.error("Perfil de usuario incompleto.");
+        setActiveTab('profile');
+        return;
     }
     if (isSubmittingService) return;
     setIsSubmittingService(true);
-  
+
     const isEditMode = !!editingService;
     const currentServiceId = editingService?.id;
-    let tempImagesToDelete = [...imagesToDelete]; 
-  
+    let tempImagesToDeleteFromStorage = [...imagesToDelete]; // Tracks storage paths to delete
+
     try {
-      let finalMainImageStoragePath: string | undefined | null = mainImage?.storage_path || null;
-  
-      if (mainImage && mainImage.file.size > 0) { 
-        if (isEditMode && mainImage.storage_path && mainImage.storage_path !== editingService?.service_images?.find(img => img.is_main_image)?.storage_path) {
-            const oldMainPath = editingService?.service_images?.find(img => img.is_main_image)?.storage_path;
-            if (oldMainPath) tempImagesToDelete.push(oldMainPath);
-        } else if (isEditMode && !mainImage.storage_path && editingService?.service_images?.find(img => img.is_main_image)?.storage_path) {
-             const oldMainPath = editingService?.service_images?.find(img => img.is_main_image)?.storage_path;
-            if (oldMainPath) tempImagesToDelete.push(oldMainPath);
+        // 1. Guardar/Actualizar Servicio Principal para obtener/confirmar finalServiceId
+        const servicePayload = {
+            name: serviceFormData.name,
+            category_id: serviceFormData.categoryId,
+            subcategory_id: serviceFormData.subcategoryId,
+            short_description: serviceFormData.shortDescription,
+            description: serviceFormData.description,
+            price: serviceFormData.price ? parseFloat(serviceFormData.price) : null,
+            provider_id: user.id,
+            provider_name: user.name,
+            provider_email: user.email,
+            provider_phone: user.phone || null,
+            features: serviceFormData.features.filter(f => f.trim() !== ''),
+            service_type: serviceFormData.service_type,
+            specific_address: (serviceFormData.service_type === 'fixed_location' || serviceFormData.service_type === 'delivery_area') ? serviceFormData.specific_address : null,
+            base_latitude: serviceFormData.base_latitude ? parseFloat(serviceFormData.base_latitude) : null,
+            base_longitude: serviceFormData.base_longitude ? parseFloat(serviceFormData.base_longitude) : null,
+            delivery_radius_km: serviceFormData.service_type === 'delivery_area' && serviceFormData.delivery_radius_km ? parseInt(serviceFormData.delivery_radius_km, 10) : null,
+            is_approved: serviceFormData.is_approved ?? (isEditMode ? editingService.is_approved : true),
+            rating: editingService?.rating || 0,
+            review_count: editingService?.reviewCount || 0,
+        };
+
+        let savedServiceData: AppServiceType;
+        if (isEditMode && currentServiceId) {
+            const { data, error } = await supabase.from('services').update(servicePayload).eq('id', currentServiceId).select().single();
+            if (error) throw error;
+            savedServiceData = data as AppServiceType;
+        } else {
+            const { data, error } = await supabase.from('services').insert(servicePayload).select().single();
+            if (error) throw error;
+            savedServiceData = data as AppServiceType;
+        }
+        const finalServiceId = savedServiceData.id;
+
+        // --- MANEJO DE IMÁGENES ---
+        let finalMainImageStoragePath: string | null = null; // Path de la imagen que SERÁ la principal
+        let newMainImageUploaded = false;
+
+        // A. Subir nueva imagen principal si se seleccionó un archivo
+        if (mainImage && mainImage.file.size > 0) {
+            const mainImgFileName = `public/${user.id}/${finalServiceId}/${Date.now()}_main_${mainImage.file.name.replace(/\s/g, '_')}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('service-images').upload(mainImgFileName, mainImage.file);
+            if (uploadError) throw uploadError;
+            finalMainImageStoragePath = uploadData.path;
+            newMainImageUploaded = true;
+            // Si había una imagen principal anterior y se subió una nueva, la anterior se debe eliminar del storage
+            if (editingService?.service_images?.find(img => img.is_main_image)?.storage_path &&
+                editingService?.service_images?.find(img => img.is_main_image)?.storage_path !== finalMainImageStoragePath) { // Verifica que no sea la misma imagen (poco probable si se sube nueva)
+                tempImagesToDeleteFromStorage.push(editingService.service_images.find(img => img.is_main_image)!.storage_path);
+            }
+        } else if (mainImage && mainImage.storage_path) {
+            // Se mantuvo una imagen principal existente (no se subió archivo nuevo para ella)
+            finalMainImageStoragePath = mainImage.storage_path;
+        }
+        // Si !mainImage, significa que la imagen principal fue explícitamente deseleccionada/eliminada.
+        // Si había una antes, se marcará para eliminar del storage.
+        else if (!mainImage && isEditMode && editingService?.service_images?.find(img => img.is_main_image)) {
+             tempImagesToDeleteFromStorage.push(editingService.service_images.find(img => img.is_main_image)!.storage_path);
+             // finalMainImageStoragePath permanece null
         }
 
-        const mainImgFileName = `public/${user.id}/${currentServiceId || 'new_service'}/${Date.now()}_main_${mainImage.file.name.replace(/\s/g, '_')}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('service-images').upload(mainImgFileName, mainImage.file);
-        if (uploadError) throw uploadError;
-        finalMainImageStoragePath = uploadData.path;
-      } else if (!mainImage && isEditMode && editingService?.service_images?.find(img => img.is_main_image)?.storage_path) {
-        const oldMainPath = editingService.service_images.find(img => img.is_main_image)!.storage_path;
-        tempImagesToDelete.push(oldMainPath);
-        finalMainImageStoragePath = null;
-      }
-  
-      if (!isEditMode && !finalMainImageStoragePath) {
-        toast.error('Imagen principal obligatoria.');
-        setIsSubmittingService(false);
-        return;
-      }
-  
-      const uploadedGalleryImageObjects: { storage_path: string, position: number }[] = [];
-      const keptExistingGalleryDbRecords: ServiceImage[] = [];
-  
-      let galleryPosition = 0;
-      for (const img of galleryImages) {
-        if (img.file.size > 0) { 
-          const galleryFileName = `public/${user.id}/${currentServiceId || 'new_service'}/${Date.now()}_gallery_${galleryPosition}_${img.file.name.replace(/\s/g, '_')}`;
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('service-images').upload(galleryFileName, img.file);
-          if (uploadError) throw uploadError;
-          uploadedGalleryImageObjects.push({ storage_path: uploadData.path, position: galleryPosition++ });
-        } else if (img.storage_path && img.id) { 
-            const existingDbRecord = editingService?.service_images?.find(dbImg => dbImg.id === img.id);
-            if (existingDbRecord) {
-                 keptExistingGalleryDbRecords.push({...existingDbRecord, position: galleryPosition++});
+
+        // B. Subir nuevas imágenes de galería
+        const uploadedGalleryImageObjects: { storage_path: string, position: number, is_main_image: boolean, service_id: string }[] = [];
+        let currentGalleryPosition = 0; // Posición relativa dentro de las de galería
+
+        for (const img of galleryImages) {
+            if (img.file.size > 0) { // Es un archivo nuevo para subir
+                const galleryFileName = `public/${user.id}/${finalServiceId}/${Date.now()}_gallery_${currentGalleryPosition}_${img.file.name.replace(/\s/g, '_')}`;
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('service-images').upload(galleryFileName, img.file);
+                if (uploadError) throw uploadError;
+                uploadedGalleryImageObjects.push({
+                    storage_path: uploadData.path,
+                    position: currentGalleryPosition++, // Se ajustará después si hay principal
+                    is_main_image: false,
+                    service_id: finalServiceId
+                });
             }
         }
-      }
-      
-      if (isEditMode && editingService?.service_images) {
-        editingService.service_images.forEach(dbImg => {
-          if (!dbImg.is_main_image && !galleryImages.find(uiImg => uiImg.id === dbImg.id && uiImg.storage_path === dbImg.storage_path)) {
-            tempImagesToDelete.push(dbImg.storage_path);
-          }
-        });
-      }
-      tempImagesToDelete = [...new Set(tempImagesToDelete)];
-
-      const servicePayload = {
-        name: serviceFormData.name, category_id: serviceFormData.categoryId, subcategory_id: serviceFormData.subcategoryId,
-        short_description: serviceFormData.shortDescription, description: serviceFormData.description,
-        price: serviceFormData.price ? parseFloat(serviceFormData.price) : null,
-        provider_id: user.id, provider_name: user.name, provider_email: user.email, provider_phone: user.phone || null,
-        features: serviceFormData.features.filter(f => f.trim() !== ''),
-        service_type: serviceFormData.service_type,
-        specific_address: (serviceFormData.service_type === 'fixed_location' || serviceFormData.service_type === 'delivery_area') ? serviceFormData.specific_address : null,
-        base_latitude: serviceFormData.base_latitude ? parseFloat(serviceFormData.base_latitude) : null,
-        base_longitude: serviceFormData.base_longitude ? parseFloat(serviceFormData.base_longitude) : null,
-        delivery_radius_km: serviceFormData.service_type === 'delivery_area' && serviceFormData.delivery_radius_km ? parseInt(serviceFormData.delivery_radius_km, 10) : null,
-        is_approved: serviceFormData.is_approved ?? (isEditMode ? editingService.is_approved : true), // Use form value, or existing, or true for new
-        rating: editingService?.rating || 0, review_count: editingService?.reviewCount || 0,
-      };
-  
-      let savedServiceData: AppServiceType;
-      if (isEditMode && currentServiceId) {
-        const { data, error } = await supabase.from('services').update(servicePayload).eq('id', currentServiceId).select().single();
-        if (error) throw error;
-        savedServiceData = data as AppServiceType;
-      } else {
-        const { data, error } = await supabase.from('services').insert(servicePayload).select().single();
-        if (error) throw error;
-        savedServiceData = data as AppServiceType;
-      }
-      const finalServiceId = savedServiceData.id;
-  
-      if (isEditMode) { 
-          const imagesToDeleteFromDb = editingService?.service_images
-            ?.filter(img => 
-                (img.is_main_image && (finalMainImageStoragePath !== img.storage_path || finalMainImageStoragePath === null)) || 
-                (!img.is_main_image && !keptExistingGalleryDbRecords.find(kgr => kgr.id === img.id)) 
-            )
-            .map(img => img.id) || [];
-          
-          if (imagesToDeleteFromDb.length > 0) {
-            await supabase.from('service_images').delete().in('id', imagesToDeleteFromDb);
-          }
-      }
-      
-      const imagesForDbUpsert: Partial<ServiceImage>[] = [];
-      let finalPosition = 0;
-      // Main Image
-      if (finalMainImageStoragePath) {
-        const existingMainDbRecord = isEditMode 
-          ? editingService?.service_images?.find(img => img.is_main_image && img.storage_path === finalMainImageStoragePath) 
-          : undefined;
         
-        const mainImageEntry: Partial<ServiceImage> = {
-          service_id: finalServiceId,
-          storage_path: finalMainImageStoragePath,
-          is_main_image: true,
-          position: finalPosition++,
-        };
-        if (existingMainDbRecord?.id) { // If it's an existing main image being kept or updated
-          mainImageEntry.id = existingMainDbRecord.id;
+        // C. Identificar imágenes existentes a mantener o eliminar
+        const keptExistingGalleryImageRecords: Partial<ServiceImage>[] = [];
+        if (isEditMode && editingService?.service_images) {
+            editingService.service_images.forEach(existingImg => {
+                if (!existingImg.is_main_image) { // Solo procesar imágenes de galería aquí
+                    const stillInGallery = galleryImages.find(uiImg => uiImg.id === existingImg.id && uiImg.storage_path === existingImg.storage_path);
+                    if (stillInGallery) {
+                        keptExistingGalleryImageRecords.push({
+                            id: existingImg.id,
+                            storage_path: existingImg.storage_path,
+                            is_main_image: false,
+                            position: 0, // Se reasignará la posición
+                            service_id: finalServiceId,
+                        });
+                    } else {
+                        // Esta imagen de galería existente fue eliminada por el usuario
+                        tempImagesToDeleteFromStorage.push(existingImg.storage_path);
+                    }
+                }
+            });
         }
-        // For a brand new main image, 'id' is omitted, so DB generates it.
-        imagesForDbUpsert.push(mainImageEntry);
-      }
-      
-      // Kept Existing Gallery Images (these already have an ID)
-      keptExistingGalleryDbRecords.forEach(img => {
-        if(img.id && img.storage_path){ 
+        tempImagesToDeleteFromStorage = [...new Set(tempImagesToDeleteFromStorage)]; // Deduplicar
+
+        // D. Construir el array final para upsert en service_images
+        const imagesForDbUpsert: Partial<ServiceImage>[] = [];
+        let finalPositionCounter = 0;
+
+        // D.1: Si hay una imagen principal (nueva o existente)
+        if (finalMainImageStoragePath) {
+            const existingMainRecordForUpsert = isEditMode && !newMainImageUploaded // Si no se subió nueva img principal
+                ? editingService?.service_images?.find(img => img.storage_path === finalMainImageStoragePath)
+                : undefined;
+
             imagesForDbUpsert.push({
-                id: img.id, // Existing ID
+                id: existingMainRecordForUpsert?.id, // ID si es existente, undefined si es nueva
                 service_id: finalServiceId,
-                storage_path: img.storage_path,
-                is_main_image: false,
-                position: finalPosition++,
+                storage_path: finalMainImageStoragePath,
+                is_main_image: true,
+                position: finalPositionCounter++,
             });
         }
-      });
 
-      // Newly Uploaded Gallery Images (omit 'id' for these)
-      uploadedGalleryImageObjects.forEach(obj => {
-        imagesForDbUpsert.push({
-          // 'id' is omitted here, so PostgreSQL will use the default gen_random_uuid()
-          service_id: finalServiceId,
-          storage_path: obj.storage_path,
-          is_main_image: false,
-          position: finalPosition++,
+        // D.2: Añadir imágenes de galería (mantenidas y nuevas)
+        // Reordenar keptExistingGalleryImageRecords según el orden actual en galleryImages UI state
+        const orderedKeptGalleryImages: Partial<ServiceImage>[] = [];
+        galleryImages.forEach(uiImg => {
+            if (uiImg.id && uiImg.storage_path) { // Es una imagen existente
+                const record = keptExistingGalleryImageRecords.find(k => k.id === uiImg.id);
+                if (record) {
+                    orderedKeptGalleryImages.push({ ...record, position: finalPositionCounter++ });
+                }
+            }
         });
-      });
+        imagesForDbUpsert.push(...orderedKeptGalleryImages);
 
-      if (imagesForDbUpsert.length > 0) {
-          // For upsert, if an object has an 'id', it tries to update.
-          // If an object does NOT have an 'id', it tries to insert (and DB should generate id).
-          const { error: siError } = await supabase
-            .from('service_images')
-            .upsert(imagesForDbUpsert, { onConflict: 'id' }); // onConflict 'id' is correct
-          if (siError) {
-            console.error('Supabase upsert error details:', siError); // Log the full error
-            throw siError;
-          }
-      } else if (!finalMainImageStoragePath && isEditMode && currentServiceId) { 
-          // If all images were removed in edit mode
-          await supabase.from('service_images').delete().eq('service_id', currentServiceId);
-      }
-      
-      if (imagesForDbUpsert.length > 0) {
-          const { error: siError } = await supabase.from('service_images').upsert(imagesForDbUpsert, { onConflict: 'id' });
-          if (siError) throw siError;
-      } else if (!finalMainImageStoragePath && isEditMode) { 
-          await supabase.from('service_images').delete().eq('service_id', finalServiceId);
-      }
+        uploadedGalleryImageObjects.forEach(newImgObj => {
+            imagesForDbUpsert.push({ ...newImgObj, position: finalPositionCounter++ });
+        });
 
-      if (tempImagesToDelete.length > 0) {
-        await supabase.storage.from('service-images').remove(tempImagesToDelete);
-      }
-      setImagesToDelete([]); 
-  
-      if (isEditMode && currentServiceId) {
-        const areasToDeleteInDb = serviceFormData.coverage_areas.filter(a => a.id && a.to_delete).map(a => a.id!);
-        if (areasToDeleteInDb.length > 0) {
-            await supabase.from('service_coverage_areas').delete().in('id', areasToDeleteInDb);
+
+        // E. ANTES del UPSERT final, asegurarse que no haya otra imagen principal en la DB para este servicio
+        if (isEditMode && finalServiceId) {
+            const updatePayload: {is_main_image: boolean, position?: number} = { is_main_image: false };
+            // Si la nueva imagen principal no es la que ya era principal,
+            // o si la imagen principal fue eliminada (finalMainImageStoragePath es null)
+            // desmarcamos todas las demás como principal.
+            // Si la imagen principal se mantuvo, no es necesario este update específico,
+            // el upsert la actualizará.
+            
+            // Si hay una nueva imagen principal definida, cualquier otra imagen que PUEDA haber sido principal debe desmarcarse.
+            if(finalMainImageStoragePath){
+                 await supabase
+                    .from('service_images')
+                    .update(updatePayload)
+                    .eq('service_id', finalServiceId)
+                    .neq('storage_path', finalMainImageStoragePath); // Desmarca todas MENOS la nueva principal
+            } else {
+                 // Si no hay imagen principal (fue eliminada), desmarca todas.
+                 await supabase
+                    .from('service_images')
+                    .update(updatePayload)
+                    .eq('service_id', finalServiceId);
+            }
         }
-        if (serviceFormData.service_type !== 'multiple_areas') {
-            await supabase.from('service_coverage_areas').delete().eq('service_id', currentServiceId);
+
+
+        // F. Upsert de imágenes a la base de datos
+        if (imagesForDbUpsert.length > 0) {
+            const { error: siError } = await supabase
+                .from('service_images')
+                .upsert(imagesForDbUpsert, { onConflict: 'id' });
+            if (siError) {
+                console.error('Supabase service_images upsert error:', siError);
+                throw siError;
+            }
+        } else if (isEditMode && finalServiceId) { 
+            // Si no hay imágenes para upsert (todas fueron eliminadas)
+            await supabase.from('service_images').delete().eq('service_id', finalServiceId);
         }
-      }
-      if (serviceFormData.service_type === 'multiple_areas') {
-        const coverageAreasToUpsert = serviceFormData.coverage_areas
-          .filter(a => a.area_name && a.area_name.trim() !== '' && !a.to_delete)
-          .map(a => ({ 
-            id: a.id, 
-            service_id: finalServiceId, area_name: a.area_name!, city: a.city || null, 
-            state: a.state || null, postal_code: a.postal_code || null 
-          }));
-        if (coverageAreasToUpsert.length > 0) {
-          const { error: coverageError } = await supabase.from('service_coverage_areas').upsert(coverageAreasToUpsert, { onConflict: 'id' });
-          if (coverageError) throw coverageError;
+
+        // G. Eliminar archivos del Storage
+        if (tempImagesToDeleteFromStorage.length > 0) {
+            const { error: storageError } = await supabase.storage.from('service-images').remove(tempImagesToDeleteFromStorage);
+            if (storageError) {
+                console.warn("Advertencia al eliminar imágenes del storage:", storageError.message);
+            }
         }
-      }
-  
-      if (!isEditMode) {
-        const availabilityEntries = [];
-        const today = new Date();
-        for (let i = 0; i < 90; i++) {
-            const date = new Date(today);
-            date.setDate(today.getDate() + i);
-            availabilityEntries.push({
-                service_id: finalServiceId,
-                date: date.toISOString().split('T')[0],
-                total_capacity: parseInt(serviceFormData.default_total_capacity, 10) || 1,
-                booked_capacity: 0,
-                is_available: serviceFormData.default_is_available,
-            });
+        setImagesToDelete([]); // Resetear el array local
+
+        // H. Manejar Áreas de Cobertura
+        if (isEditMode && currentServiceId) {
+            const areasToDeleteInDb = serviceFormData.coverage_areas.filter(a => a.id && a.to_delete).map(a => a.id!);
+            if (areasToDeleteInDb.length > 0) {
+                await supabase.from('service_coverage_areas').delete().in('id', areasToDeleteInDb);
+            }
+            if (serviceFormData.service_type !== 'multiple_areas') { // Si cambió de multiple_areas a otro tipo
+                await supabase.from('service_coverage_areas').delete().eq('service_id', currentServiceId);
+            }
         }
-        if (availabilityEntries.length > 0) {
-            const { error: availabilityError } = await supabase.from('service_availability').insert(availabilityEntries);
-            if (availabilityError) console.warn("Error setting default availability:", availabilityError.message);
+        if (serviceFormData.service_type === 'multiple_areas') {
+            const coverageAreasToUpsert = serviceFormData.coverage_areas
+                .filter(a => a.area_name && a.area_name.trim() !== '' && !a.to_delete)
+                .map(a => ({ 
+                    id: a.id, // Para upsert
+                    service_id: finalServiceId, 
+                    area_name: a.area_name!, 
+                    city: a.city || null, 
+                    state: a.state || null, 
+                    postal_code: a.postal_code || null 
+                }));
+            if (coverageAreasToUpsert.length > 0) {
+                const { error: coverageError } = await supabase.from('service_coverage_areas').upsert(coverageAreasToUpsert, { onConflict: 'id' });
+                if (coverageError) throw coverageError;
+            }
         }
-      }
-  
-      toast.success(`Servicio ${isEditMode ? 'actualizado' : 'publicado'}! ${!isEditMode && !savedServiceData.is_approved ? 'Pendiente de aprobación.' : ''}`);
-      setShowServiceForm(false);
-      resetServiceForm();
-      fetchProviderServicesAndReservations(); 
+
+        // I. Default Availability for NEW services
+        if (!isEditMode) {
+            const availabilityEntries = [];
+            const today = new Date();
+            for (let i = 0; i < 90; i++) {
+                const date = new Date(today);
+                date.setDate(today.getDate() + i);
+                availabilityEntries.push({
+                    service_id: finalServiceId,
+                    date: date.toISOString().split('T')[0],
+                    total_capacity: parseInt(serviceFormData.default_total_capacity, 10) || 1,
+                    booked_capacity: 0,
+                    is_available: serviceFormData.default_is_available,
+                });
+            }
+            if (availabilityEntries.length > 0) {
+                const { error: availabilityError } = await supabase.from('service_availability').insert(availabilityEntries);
+                if (availabilityError) console.warn("Error setting default availability:", availabilityError.message);
+            }
+        }
+
+        toast.success(`Servicio ${isEditMode ? 'actualizado' : 'publicado'}! ${!isEditMode && !savedServiceData.is_approved ? 'Pendiente de aprobación.' : ''}`);
+        setShowServiceForm(false);
+        resetServiceForm();
+        fetchProviderServicesAndReservations(); 
+
     } catch (error: any) {
-      console.error(`Error al ${isEditMode ? 'actualizar' : 'crear'} servicio:`, error);
-      toast.error(`Error: ${error.message || 'Desconocido'}`);
+        console.error(`Error al ${isEditMode ? 'actualizar' : 'crear'} servicio:`, error);
+        toast.error(`Error: ${error.message || 'Error desconocido durante el guardado del servicio.'}`);
     } finally {
-      setIsSubmittingService(false);
+        setIsSubmittingService(false);
     }
-  };
+};
   
   const handleDeleteService = async (serviceId: string, serviceName: string) => {
     if (!user?.id) return;
