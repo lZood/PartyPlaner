@@ -56,6 +56,7 @@ interface ServiceFormData {
   coverage_areas: Array<Partial<ServiceCoverageArea & { temp_id: string | number; id?: string; to_delete?: boolean }>>;
   default_total_capacity: string;
   default_is_available: boolean;
+  is_approved?: boolean;
 }
 
 interface ProviderService extends AppServiceType {
@@ -93,6 +94,94 @@ const ProfilePage: React.FC = () => {
   const [isSubmittingService, setIsSubmittingService] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
 
+  const handleToggleServiceVisibility = async (serviceId: string, serviceName: string, newVisibility: boolean) => {
+  if (!user?.id) {
+    toast.error('Debes estar autenticado para cambiar la visibilidad del servicio.');
+    return;
+  }
+
+  // Opcional: Añadir un estado de carga específico para este botón si la operación es lenta
+  // const [togglingVisibilityId, setTogglingVisibilityId] = useState<string | null>(null);
+  // setTogglingVisibilityId(serviceId);
+
+  try {
+    const { data, error } = await supabase
+      .from('services')
+      .update({ is_approved: newVisibility })
+      .eq('id', serviceId)
+      .eq('provider_id', user.id) // Asegurar que solo el proveedor pueda modificarlo
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) {
+      toast.success(`Servicio "${serviceName}" ahora está ${newVisibility ? 'Disponible' : 'No Disponible'}.`);
+      // Actualizar el estado local para reflejar el cambio inmediatamente
+      setMyServices(prevServices =>
+        prevServices.map(s =>
+          s.id === serviceId ? { ...s, is_approved: newVisibility } : s
+        )
+      );
+      // Si el servicio editado es el que se está viendo en el formulario, actualizarlo también
+      if (editingService?.id === serviceId) {
+        setEditingService(prev => prev ? ({...prev, is_approved: newVisibility }) : null);
+         setServiceFormData(prev => ({...prev, is_approved: newVisibility} as ServiceFormData & {is_approved: boolean})) // Actualiza el form data también si es necesario
+      }
+    }
+  } catch (err: any) {
+    toast.error(`Error al cambiar visibilidad: ${err.message}`);
+    console.error("Error toggling service visibility:", err);
+  } finally {
+    // setTogglingVisibilityId(null);
+  }
+};
+  const handleToggleServiceVisibility = async (serviceId: string, serviceName: string, newVisibility: boolean) => {
+  if (!user?.id) {
+    toast.error('Debes estar autenticado para cambiar la visibilidad del servicio.');
+    return;
+  }
+
+  // Opcional: Añadir un estado de carga específico para este botón si la operación es lenta
+  // const [togglingVisibilityId, setTogglingVisibilityId] = useState<string | null>(null);
+  // setTogglingVisibilityId(serviceId);
+
+  try {
+    const { data, error } = await supabase
+      .from('services')
+      .update({ is_approved: newVisibility })
+      .eq('id', serviceId)
+      .eq('provider_id', user.id) // Asegurar que solo el proveedor pueda modificarlo
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) {
+      toast.success(`Servicio "${serviceName}" ahora está ${newVisibility ? 'Disponible' : 'No Disponible'}.`);
+      // Actualizar el estado local para reflejar el cambio inmediatamente
+      setMyServices(prevServices =>
+        prevServices.map(s =>
+          s.id === serviceId ? { ...s, is_approved: newVisibility } : s
+        )
+      );
+      // Si el servicio editado es el que se está viendo en el formulario, actualizarlo también
+      if (editingService?.id === serviceId) {
+        setEditingService(prev => prev ? ({...prev, is_approved: newVisibility }) : null);
+         setServiceFormData(prev => ({...prev, is_approved: newVisibility} as ServiceFormData & {is_approved: boolean})) // Actualiza el form data también si es necesario
+      }
+    }
+  } catch (err: any) {
+    toast.error(`Error al cambiar visibilidad: ${err.message}`);
+    console.error("Error toggling service visibility:", err);
+  } finally {
+    // setTogglingVisibilityId(null);
+  }
+};
   const [formData, setFormData] = useState<Partial<AppUser>>({
     name: '',
     email: '',
@@ -136,6 +225,7 @@ const ProfilePage: React.FC = () => {
         .from('services')
         .select('*, service_coverage_areas(*), service_images(*)')
         .eq('provider_id', user.id)
+        .eq('is_approved', true)
         .order('created_at', { ascending: false });
 
       if (servicesError) throw servicesError;
@@ -382,6 +472,7 @@ const ProfilePage: React.FC = () => {
         subcategoryId: serviceToEdit.subcategoryId || '',
         shortDescription: serviceToEdit.shortDescription || '',
         description: serviceToEdit.description || '',
+        is_approved: serviceToEdit.is_approved,
         price: serviceToEdit.price?.toString() || '',
         features: serviceToEdit.features?.length ? serviceToEdit.features : [''],
         service_type: serviceToEdit.service_type || 'fixed_location',
@@ -630,7 +721,7 @@ const ProfilePage: React.FC = () => {
         base_latitude: serviceFormData.base_latitude ? parseFloat(serviceFormData.base_latitude) : null,
         base_longitude: serviceFormData.base_longitude ? parseFloat(serviceFormData.base_longitude) : null,
         delivery_radius_km: serviceFormData.service_type === 'delivery_area' && serviceFormData.delivery_radius_km ? parseInt(serviceFormData.delivery_radius_km, 10) : null,
-        is_approved: editingService?.is_approved || false,
+        is_approved: editingService ? (serviceFormData as any).is_approved ?? editingService.is_approved : true,
         rating: editingService?.rating || 0, review_count: editingService?.reviewCount || 0,
       };
   
@@ -883,9 +974,14 @@ const ProfilePage: React.FC = () => {
                             <h3 className="text-lg font-semibold text-gray-800 group-hover:text-primary-600 transition-colors">
                                 <Link to={`/service/${service.id}`}>{service.name}</Link>
                             </h3>
-                            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${ service.is_approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                              {service.is_approved ? 'Aprobado' : 'Pendiente'}
-                            </span>
+                            <button
+                              onClick={() => handleToggleServiceVisibility(service.id, service.name, !service.is_approved)}
+                              className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors duration-150 ease-in-out
+                                ${service.is_approved ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}
+                              `}
+                            >
+                              {service.is_approved ? 'Disponible' : 'No Disponible'}
+                            </button>
                           </div>
                           <p className="text-xs text-gray-500 mb-1"> Categoría: {categories.find(c=>c.id === service.categoryId)?.name || 'N/A'} </p>
                           <p className="text-sm text-gray-600 line-clamp-2 mb-3 h-10">{service.shortDescription}</p>
