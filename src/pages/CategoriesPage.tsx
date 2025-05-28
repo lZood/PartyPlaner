@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { categories } from '../../data/categories';
+import { categories } from '../data/categories';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 // Helper para obtener un ícono basado en el ID de la categoría (puedes expandir esto)
