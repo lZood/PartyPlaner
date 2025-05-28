@@ -365,6 +365,82 @@ const ProfilePage: React.FC = () => {
     e.target.value = '';
   };
 
+  const fetchProviderServicesAndReservations = useCallback(async () => {
+  if (!user?.id) return; // Salir si no hay ID de usuario
+
+  setIsLoadingServices(true);
+  try {
+    // 1. Obtener los servicios del proveedor, incluyendo sus imágenes y áreas de cobertura directamente
+    const { data: servicesData, error: servicesError } = await supabase
+      .from('services')
+      .select('*, service_coverage_areas(*), service_images(*)') // Cargar imágenes y áreas aquí
+      .eq('provider_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (servicesError) {
+      console.error("Error fetching provider services:", servicesError);
+      throw servicesError;
+    }
+
+    if (!servicesData) {
+      setMyServices([]);
+      setIsLoadingServices(false);
+      return;
+    }
+
+    // 2. Para cada servicio, determinar su imagen principal y obtener sus reservaciones
+    const servicesWithDetails = await Promise.all(
+      servicesData.map(async (service) => {
+        // Determinar la imagen principal a partir de las service_images ya cargadas
+        const mainImageRecord = service.service_images?.find((img: ServiceImage) => img.is_main_image) || service.service_images?.[0];
+        let publicUrl = 'https://placehold.co/300x200?text=Sin+Imagen'; // URL por defecto
+
+        if (mainImageRecord?.storage_path) {
+          const { data: urlData } = supabase.storage
+            .from('service-images')
+            .getPublicUrl(mainImageRecord.storage_path);
+          if (urlData?.publicUrl) {
+            publicUrl = urlData.publicUrl;
+          }
+        }
+
+        // Obtener reservaciones para este servicio específico
+        const { data: reservationsForThisService, error: reservationsError } = await supabase
+          .from('reservations')
+          .select('id, customer_name, event_date, quantity, status, customer_email, customer_phone') // Selecciona solo los campos que necesitas mostrar
+          .eq('service_id', service.id)
+          .order('event_date', { ascending: true });
+
+        if (reservationsError) {
+          console.error(`Error cargando reservaciones para servicio ${service.id}:`, reservationsError.message);
+          // Continuar sin las reservaciones para este servicio si hay un error, o manejarlo como prefieras
+        }
+
+        return { 
+            ...service, // Todas las propiedades del servicio
+            imageUrl: publicUrl, // La URL de la imagen principal procesada
+            // `service.service_images` ya contiene todas las imágenes del servicio
+            // `service.service_coverage_areas` ya contiene las áreas de cobertura
+            reservations: (reservationsForThisService as Reservation[]) || [], // Las reservaciones obtenidas para este servicio
+        } as ProviderService; // Asegúrate que tu tipo ProviderService coincida
+      })
+    );
+    setMyServices(servicesWithDetails);
+  } catch (err: any) {
+    toast.error(`Error al cargar tus servicios y reservaciones: ${err.message}`);
+    setMyServices([]); // Limpiar en caso de error
+  } finally {
+    setIsLoadingServices(false);
+  }
+}, [user?.id, supabase]); // `supabase` como dependencia si no está definido globalmente en el archivo
+
+// Luego, dentro de tu componente ProfilePage, el useEffect que llama a esta función:
+useEffect(() => {
+  if (user?.id && (activeTab === 'myServices' || showServiceForm)) {
+    fetchProviderServicesAndReservations();
+  }
+}, [user?.id, activeTab, showServiceForm, fetchProviderServicesAndReservations]);
+  
 // Aproximadamente línea 193
 const removeImage = (index: number, isMain: boolean = false) => {
   if (isMain && mainImage) {
