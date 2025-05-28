@@ -49,7 +49,7 @@ const ContactPage: React.FC = () => {
           <div className="absolute inset-0 bg-black bg-opacity-50"></div>
         </div>
         <div className="relative container-custom h-full flex flex-col justify-center text-white z-10">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">Contacto</h1>
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-white">Contacto</h1>
           <p className="text-lg md:text-xl max-w-2xl">
             Estamos aquí para ayudarte a crear el evento de tus sueños
           </p>
