@@ -85,21 +85,27 @@ export interface ServiceAvailability {
   isAvailable: boolean;
 }
 
+// En src/types/index.ts
 export interface Reservation {
   id: string;
-  userId: string;
-  serviceId: string;
-  eventDate: string;
+  user_id: string; // o userId si así lo mapeas
+  service_id: string; // o serviceId
+  event_date: string; // YYYY-MM-DD
   quantity: number;
-  status: 'pending' | 'confirmed' | 'cancelled';
-  totalPrice: number;
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-  eventLocation: string;
+  status: string;
+  total_price: number;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  event_location: string;
   comments?: string;
-  createdAt: string;
-  updatedAt: string;
+  created_at: string; // Opcional si no lo usas directamente
+  updated_at?: string; // Opcional
+  service?: { // Para la información unida del servicio
+    name: string;
+    imageUrl?: string; // Este es el alias de main_image_storage_path
+    provider_name?: string;
+  };
 }
 
 export interface Review {
