@@ -630,24 +630,33 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
 
 
     // 3. Preparar datos del servicio (sin ID para inserción)
-    const servicePayload: Omit<ServiceFormData, 'id' | 'coverage_areas' | 'default_total_capacity' | 'default_is_available'> & { provider_id: string, provider_name: string, provider_email: string, provider_phone: string | null, is_approved: boolean, rating: number, review_count: number, default_total_capacity?: number, default_is_available?: boolean } = {
+    const servicePayload: Omit<ServiceFormData, 'id' | 'coverage_areas' | 'default_total_capacity' | 'default_is_available'> & { 
+        provider_id: string, 
+        provider_name: string, 
+        provider_email: string, 
+        provider_phone: string | null, 
+        is_approved: boolean, 
+        rating: number, 
+        review_count: number
+        // Ya no se añaden default_total_capacity ni default_is_available aquí
+    } = {
         name: serviceFormData.name,
         category_id: serviceFormData.categoryId,
         subcategory_id: serviceFormData.subcategoryId,
         short_description: serviceFormData.shortDescription,
         description: serviceFormData.description,
         price: serviceFormData.price ? parseFloat(serviceFormData.price) : null,
-        provider_id: user.id,
-        provider_name: user.name,
-        provider_email: user.email,
-        provider_phone: user.phone || null,
+        provider_id: user!.id, // user ya está verificado al inicio de la función
+        provider_name: user!.name!,
+        provider_email: user!.email!,
+        provider_phone: user!.phone || null,
         features: serviceFormData.features.filter(f => f.trim() !== ''),
         service_type: serviceFormData.service_type,
         specific_address: (serviceFormData.service_type === 'fixed_location' || serviceFormData.service_type === 'delivery_area') ? serviceFormData.specific_address : null,
         base_latitude: serviceFormData.base_latitude ? parseFloat(serviceFormData.base_latitude) : null,
         base_longitude: serviceFormData.base_longitude ? parseFloat(serviceFormData.base_longitude) : null,
         delivery_radius_km: serviceFormData.service_type === 'delivery_area' && serviceFormData.delivery_radius_km ? parseInt(serviceFormData.delivery_radius_km, 10) : null,
-        is_approved: editingService?.is_approved || false, // Mantener estado de aprobación si se edita
+        is_approved: editingService?.is_approved || false,
         rating: editingService?.rating || 0,
         review_count: editingService?.reviewCount || 0,
     };
