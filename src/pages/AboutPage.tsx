@@ -78,47 +78,7 @@ const AboutPage: React.FC = () => {
         </div>
       </section>
 
-      <section className="section bg-gray-50">
-        <div className="container-custom">
-          <h2 className="text-3xl font-bold mb-10 text-center">Nuestro Equipo</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {[
-              {
-                name: 'Carlos Aguirre',
-                role: 'CEO y Fundador',
-                image: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg',
-              },
-              {
-                name: 'Ana Beltrán',
-                role: 'Directora de Operaciones',
-                image: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
-              },
-              {
-                name: 'Eduardo Torres',
-                role: 'Director de Tecnología',
-                image: 'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg',
-              },
-              {
-                name: 'Gabriela Guzmán',
-                role: 'Directora de Marketing',
-                image: 'https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg',
-              },
-            ].map((member, index) => (
-              <div key={index} className="text-center">
-                <div className="mb-4">
-                  <img
-                    src={member.image}
-                    alt={member.name}
-                    className="w-40 h-40 object-cover rounded-full mx-auto"
-                  />
-                </div>
-                <h3 className="text-xl font-semibold">{member.name}</h3>
-                <p className="text-gray-600">{member.role}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      
     </div>
   );
 };
