@@ -365,13 +365,21 @@ const ProfilePage: React.FC = () => {
     e.target.value = '';
   };
 
-  const removeImage = (index: number, isMain: boolean = false) => {
-    if (isMain) {
-      setMainImage(null);
-    } else {
-      setGalleryImages(prev => prev.filter((_, i) => i !== index));
+// Aproximadamente línea 193
+const removeImage = (index: number, isMain: boolean = false) => {
+  if (isMain && mainImage) {
+    if (mainImage.storage_path) { // Si es una imagen existente del storage
+      setImagesToDelete(prev => [...prev, mainImage.storage_path!]);
     }
-  };
+    setMainImage(null);
+  } else {
+    const imgToRemove = galleryImages[index];
+    if (imgToRemove?.storage_path) { // Si es una imagen existente del storage
+      setImagesToDelete(prev => [...prev, imgToRemove.storage_path!]);
+    }
+    setGalleryImages(prev => prev.filter((_, i) => i !== index));
+  }
+};
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
