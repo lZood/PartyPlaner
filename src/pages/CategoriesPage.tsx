@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { categories } from '../data/categories';
+import { categories } from '../data/categories'; // Asegúrate que la ruta a tus datos sea correcta
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 // Helper para obtener un ícono basado en el ID de la categoría (puedes expandir esto)
-import { Music, Palette, CarFront as ChairFront, Coffee, Candy, Package as PackageIcon, ShoppingBag, Camera, Home } from 'lucide-react'; // Importa más iconos si los necesitas
+import { Music, Palette, CarFront as ChairFront, Coffee, Candy, Package as PackageIcon, ShoppingBag, Camera, Home } from 'lucide-react';
 
 const CategoryIcon: React.FC<{ iconId: string | undefined; className?: string }> = ({ iconId, className = "w-8 h-8 text-primary-500" }) => {
   switch (iconId) {
@@ -12,11 +12,11 @@ const CategoryIcon: React.FC<{ iconId: string | undefined; className?: string }>
     case 'decoration': return <Palette className={className} />;
     case 'furniture': return <ChairFront className={className} />;
     case 'food': return <Coffee className={className} />;
-    case 'candy': // Asumiendo que 'candy' es el id correcto para "Dulces y Piñatas"
-    case 'snacks': // Añadido para cubrir el ID actual en tu data/categories.ts
-        return <Candy className={className} />;
+    case 'candy':
+    case 'snacks':
+      return <Candy className={className} />;
     case 'disposables': return <PackageIcon className={className} />;
-    case 'venues': return <Home className={className} /> // Ejemplo para Salones de Eventos
+    case 'venues': return <Home className={className} />
     // Añade más casos según los IDs de tus categorías
     default: return <ShoppingBag className={className} />; // Un ícono por defecto
   }
@@ -34,6 +34,10 @@ const CategoriesPage: React.FC = () => {
     setExpandedCategory(expandedCategory === categoryId ? null : categoryId);
   };
 
+  // Es buena práctica tener slugs amigables para URL, pero usaremos los IDs directamente como en tu código original.
+  // Si tus IDs no son amigables para URL (ej. contienen espacios, ñ, etc.), considera crear slugs.
+  // Por ejemplo: const createSlug = (text: string) => text.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
+
   return (
     <div className="bg-white py-12 md:py-16">
       <div className="container-custom">
@@ -47,7 +51,7 @@ const CategoriesPage: React.FC = () => {
         <div className="space-y-8">
           {categories.map((category) => (
             <div key={category.id} className="bg-white rounded-xl shadow-xl overflow-hidden transition-all duration-300 ease-in-out hover:shadow-2xl">
-              <div 
+              <div
                 className="flex flex-col md:flex-row items-center justify-between p-6 cursor-pointer"
                 onClick={() => toggleCategory(category.id)}
               >
@@ -63,9 +67,14 @@ const CategoriesPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center">
-                   <Link
-                    to={`/category/${category.id}`}
-                    onClick={(e) => e.stopPropagation()} // Evita que el Link active el toggle de la categoría
+                  {/* El enlace "Ver Todo en {category.name}" puede ir a una página que liste todo de la categoría principal,
+                      o también a la página de búsqueda solo con el filtro de categoría.
+                      Por ahora lo dejo como estaba, pero podrías querer cambiarlo a:
+                      to={`/searchresultpage?categoria=${category.id}`}
+                  */}
+                  <Link
+                    to={`/category/${category.id}`} // O considera: `/searchresultpage?categoria=${category.id}`
+                    onClick={(e) => e.stopPropagation()}
                     className="text-sm text-primary-600 hover:text-primary-700 font-medium py-2 px-4 rounded-lg hover:bg-primary-50 transition-colors mr-3"
                   >
                     Ver Todo en {category.name}
@@ -85,24 +94,34 @@ const CategoriesPage: React.FC = () => {
                   <h3 className="text-lg font-semibold text-gray-700 mb-4">Subcategorías en {category.name}:</h3>
                   {category.subcategories && category.subcategories.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {category.subcategories.map((subcategory) => (
-                        <Link
-                          key={subcategory.id}
-                          to={`/category/${category.id}/${subcategory.id}`}
-                          className="group block p-4 bg-white rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 ease-in-out"
-                        >
-                          <div className="flex items-center">
-                            {/* Podrías tener iconos para subcategorías también */}
-                            {/* <CategoryIcon iconId={subcategory.icon} className="w-6 h-6 text-secondary-500 mr-3" /> */}
-                            <div>
-                              <h4 className="font-medium text-gray-800 group-hover:text-secondary-600 transition-colors">
-                                {subcategory.name}
-                              </h4>
-                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{subcategory.description}</p>
+                      {category.subcategories.map((subcategory) => {
+                        // Construimos la URL para la página de resultados de búsqueda
+                        // Usamos category.id y subcategory.id como parámetros
+                        // Si tus IDs no son URL-friendly, considera usar slugs
+                        // const categorySlug = createSlug(category.id); // o category.slug si lo tienes
+                        // const subcategorySlug = createSlug(subcategory.id); // o subcategory.slug
+
+                        const searchPath = `/searchresultpage?categoria=${encodeURIComponent(category.id)}&subcategoria=${encodeURIComponent(subcategory.id)}`;
+
+                        return (
+                          <Link
+                            key={subcategory.id}
+                            to={searchPath} // <--- AQUÍ EL CAMBIO PRINCIPAL
+                            className="group block p-4 bg-white rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 ease-in-out"
+                          >
+                            <div className="flex items-center">
+                              {/* Podrías tener iconos para subcategorías también */}
+                              {/* <CategoryIcon iconId={subcategory.icon} className="w-6 h-6 text-secondary-500 mr-3" /> */}
+                              <div>
+                                <h4 className="font-medium text-gray-800 group-hover:text-secondary-600 transition-colors">
+                                  {subcategory.name}
+                                </h4>
+                                <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{subcategory.description}</p>
+                              </div>
                             </div>
-                          </div>
-                        </Link>
-                      ))}
+                          </Link>
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-sm text-gray-500">No hay subcategorías disponibles.</p>
