@@ -1,15 +1,16 @@
+// src/pages/CategoryPage.tsx
 import React, { useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { categories } from '../data/categories';
+import { categories } from '../data/categories'; //
 
 const CategoryPage: React.FC = () => {
-  const { categoryId } = useParams<{ categoryId: string }>();
+  const { categoryId } = useParams<{ categoryId: string }>(); //
   
-  const category = categories.find((cat) => cat.id === categoryId);
+  const category = categories.find((cat) => cat.id === categoryId); //
   
   useEffect(() => {
     if (category) {
-      document.title = `${category.name} | CABETG Party Planner`;
+      document.title = `${category.name} | CABETG Party Planner`; //
     }
   }, [category]);
 
@@ -31,7 +32,7 @@ const CategoryPage: React.FC = () => {
       <div className="relative h-[40vh] min-h-[300px]">
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${category.imageUrl})` }}
+          style={{ backgroundImage: `url(${category.imageUrl})` }} //
         >
           <div className="absolute inset-0 bg-black bg-opacity-50"></div>
         </div>
@@ -55,22 +56,23 @@ const CategoryPage: React.FC = () => {
             {category.subcategories.map((subcategory) => (
               <Link
                 key={subcategory.id}
-                to={`/category/${categoryId}/${subcategory.id}`}
+                // Updated Link destination
+                to={`/search?category=${categoryId}&subcategory=${subcategory.id}`}
                 className="group"
               >
                 <div className="card overflow-hidden h-full">
                   <div className="relative h-48 overflow-hidden">
                     <img
-                      src={subcategory.imageUrl}
+                      src={subcategory.imageUrl} //
                       alt={subcategory.name}
                       className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
                   <div className="p-6">
                     <h3 className="text-xl font-semibold mb-2 group-hover:text-primary-500 transition-colors">
-                      {subcategory.name}
+                      {subcategory.name} {/* */}
                     </h3>
-                    <p className="text-gray-600 mb-4">{subcategory.description}</p>
+                    <p className="text-gray-600 mb-4">{subcategory.description}</p> {/* */}
                     <div className="text-primary-500 font-medium group-hover:text-primary-600 flex items-center">
                       <span>Ver servicios</span>
                       <svg
