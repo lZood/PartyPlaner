@@ -1,3 +1,4 @@
+// src/pages/ProfilePage.tsx
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import {
@@ -56,7 +57,7 @@ interface ServiceFormData {
   coverage_areas: Array<Partial<ServiceCoverageArea & { temp_id: string | number; id?: string; to_delete?: boolean }>>;
   default_total_capacity: string;
   default_is_available: boolean;
-  is_approved?: boolean;
+  is_approved?: boolean; // Added for provider visibility control
 }
 
 interface ProviderService extends AppServiceType {
@@ -94,94 +95,6 @@ const ProfilePage: React.FC = () => {
   const [isSubmittingService, setIsSubmittingService] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
 
-  const handleToggleServiceVisibility = async (serviceId: string, serviceName: string, newVisibility: boolean) => {
-  if (!user?.id) {
-    toast.error('Debes estar autenticado para cambiar la visibilidad del servicio.');
-    return;
-  }
-
-  // Opcional: Añadir un estado de carga específico para este botón si la operación es lenta
-  // const [togglingVisibilityId, setTogglingVisibilityId] = useState<string | null>(null);
-  // setTogglingVisibilityId(serviceId);
-
-  try {
-    const { data, error } = await supabase
-      .from('services')
-      .update({ is_approved: newVisibility })
-      .eq('id', serviceId)
-      .eq('provider_id', user.id) // Asegurar que solo el proveedor pueda modificarlo
-      .select()
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    if (data) {
-      toast.success(`Servicio "${serviceName}" ahora está ${newVisibility ? 'Disponible' : 'No Disponible'}.`);
-      // Actualizar el estado local para reflejar el cambio inmediatamente
-      setMyServices(prevServices =>
-        prevServices.map(s =>
-          s.id === serviceId ? { ...s, is_approved: newVisibility } : s
-        )
-      );
-      // Si el servicio editado es el que se está viendo en el formulario, actualizarlo también
-      if (editingService?.id === serviceId) {
-        setEditingService(prev => prev ? ({...prev, is_approved: newVisibility }) : null);
-         setServiceFormData(prev => ({...prev, is_approved: newVisibility} as ServiceFormData & {is_approved: boolean})) // Actualiza el form data también si es necesario
-      }
-    }
-  } catch (err: any) {
-    toast.error(`Error al cambiar visibilidad: ${err.message}`);
-    console.error("Error toggling service visibility:", err);
-  } finally {
-    // setTogglingVisibilityId(null);
-  }
-};
-  const handleToggleServiceVisibility = async (serviceId: string, serviceName: string, newVisibility: boolean) => {
-  if (!user?.id) {
-    toast.error('Debes estar autenticado para cambiar la visibilidad del servicio.');
-    return;
-  }
-
-  // Opcional: Añadir un estado de carga específico para este botón si la operación es lenta
-  // const [togglingVisibilityId, setTogglingVisibilityId] = useState<string | null>(null);
-  // setTogglingVisibilityId(serviceId);
-
-  try {
-    const { data, error } = await supabase
-      .from('services')
-      .update({ is_approved: newVisibility })
-      .eq('id', serviceId)
-      .eq('provider_id', user.id) // Asegurar que solo el proveedor pueda modificarlo
-      .select()
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    if (data) {
-      toast.success(`Servicio "${serviceName}" ahora está ${newVisibility ? 'Disponible' : 'No Disponible'}.`);
-      // Actualizar el estado local para reflejar el cambio inmediatamente
-      setMyServices(prevServices =>
-        prevServices.map(s =>
-          s.id === serviceId ? { ...s, is_approved: newVisibility } : s
-        )
-      );
-      // Si el servicio editado es el que se está viendo en el formulario, actualizarlo también
-      if (editingService?.id === serviceId) {
-        setEditingService(prev => prev ? ({...prev, is_approved: newVisibility }) : null);
-         setServiceFormData(prev => ({...prev, is_approved: newVisibility} as ServiceFormData & {is_approved: boolean})) // Actualiza el form data también si es necesario
-      }
-    }
-  } catch (err: any) {
-    toast.error(`Error al cambiar visibilidad: ${err.message}`);
-    console.error("Error toggling service visibility:", err);
-  } finally {
-    // setTogglingVisibilityId(null);
-  }
-};
   const [formData, setFormData] = useState<Partial<AppUser>>({
     name: '',
     email: '',
@@ -205,6 +118,7 @@ const ProfilePage: React.FC = () => {
     coverage_areas: [],
     default_total_capacity: '1',
     default_is_available: true,
+    is_approved: true, // Default new services to visible by provider
   };
 
   const [serviceFormData, setServiceFormData] = useState<ServiceFormData>(initialServiceFormData);
@@ -216,22 +130,21 @@ const ProfilePage: React.FC = () => {
   const [myFavoriteServices, setMyFavoriteServices] = useState<FavoriteItem[]>([]);
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
 
-  // Moved fetchProviderServicesAndReservations earlier
+  // MOVED fetchProviderServicesAndReservations earlier
   const fetchProviderServicesAndReservations = useCallback(async () => {
     if (!user?.id) return;
     setIsLoadingServices(true);
     try {
       const { data: servicesData, error: servicesError } = await supabase
         .from('services')
-        .select('*, service_coverage_areas(*), service_images(*)')
+        .select('*, service_coverage_areas(*), service_images(*)') // Fetch all necessary related data
         .eq('provider_id', user.id)
-        .eq('is_approved', true)
         .order('created_at', { ascending: false });
 
       if (servicesError) throw servicesError;
       if (!servicesData) {
         setMyServices([]);
-        setIsLoadingServices(false);
+        // setIsLoadingServices(false); // finally block handles this
         return;
       }
 
@@ -257,6 +170,9 @@ const ProfilePage: React.FC = () => {
               ...service, 
               imageUrl: publicUrl, 
               reservations: (reservationsForThisService as Reservation[]) || [],
+              // Ensure all fields from ProviderService are correctly mapped if not directly present on 'service'
+              service_images: service.service_images || [],
+              service_coverage_areas: service.service_coverage_areas || [],
           } as ProviderService;
         })
       );
@@ -267,7 +183,7 @@ const ProfilePage: React.FC = () => {
     } finally {
       setIsLoadingServices(false);
     }
-  }, [user?.id, supabase]);
+  }, [user?.id, supabase]); // Added supabase as dependency
 
   useEffect(() => {
     if (user) {
@@ -300,6 +216,7 @@ const ProfilePage: React.FC = () => {
     }
   }, [isAuthenticated, navigate, user?.id]);
 
+  // This useEffect now correctly uses the defined fetchProviderServicesAndReservations
   useEffect(() => {
     if (user?.id && (activeTab === 'myServices' || showServiceForm)) {
         fetchProviderServicesAndReservations();
@@ -326,7 +243,8 @@ const ProfilePage: React.FC = () => {
           if (reservationsError) throw reservationsError;
           if (!reservationsData) {
             setMyPurchases([]);
-            return; // No need to set loading false here, finally block will do it
+            // setIsLoadingPurchases(false); // finally handles this
+            return;
           }
 
           const purchasesWithFullServiceInfo = await Promise.all(
@@ -390,7 +308,7 @@ const ProfilePage: React.FC = () => {
           if (error) throw error;
 
           const populatedFavorites = favoritesData?.map(fav => {
-            const service = fav.service as any;
+            const service = fav.service as any; // Cast to any for easier access, ensure proper type mapping
             if (!service) return null;
 
             let imageUrl = 'https://placehold.co/300x200?text=Sin+Imagen';
@@ -400,6 +318,7 @@ const ProfilePage: React.FC = () => {
               if (urlData?.publicUrl) imageUrl = urlData.publicUrl;
             }
             
+            // Explicitly map fields to AppServiceType
             const serviceDetails: AppServiceType = {
                 id: service.id,
                 name: service.name,
@@ -407,14 +326,14 @@ const ProfilePage: React.FC = () => {
                 shortDescription: service.short_description,
                 price: service.price,
                 imageUrl: imageUrl,
-                gallery: service.gallery || [],
+                gallery: service.gallery || [], // Assuming gallery is array of strings from DB or needs mapping
                 categoryId: service.category_id,
                 subcategoryId: service.subcategory_id,
-                rating: service.rating,
-                reviewCount: service.review_count,
+                rating: service.rating ?? 0, // Default if null
+                reviewCount: service.review_count ?? 0, // Default if null
                 features: service.features || [],
                 options: service.options || [], 
-                availability: service.availability || [],
+                availability: service.availability || [], // Ensure this is properly typed/mapped if complex
                 service_type: service.service_type,
                 specific_address: service.specific_address,
                 base_latitude: service.base_latitude,
@@ -425,7 +344,7 @@ const ProfilePage: React.FC = () => {
                 provider_name: service.provider_name,
                 provider_phone: service.provider_phone,
                 provider_email: service.provider_email,
-                is_approved: service.is_approved
+                is_approved: service.is_approved 
             };
 
             return {
@@ -462,7 +381,7 @@ const ProfilePage: React.FC = () => {
   };
 
   const handleOpenServiceForm = (serviceToEdit: ProviderService | null = null) => {
-    resetServiceForm();
+    resetServiceForm(); // Always reset first
     if (serviceToEdit) {
       setEditingService(serviceToEdit);
       setServiceFormData({
@@ -472,7 +391,6 @@ const ProfilePage: React.FC = () => {
         subcategoryId: serviceToEdit.subcategoryId || '',
         shortDescription: serviceToEdit.shortDescription || '',
         description: serviceToEdit.description || '',
-        is_approved: serviceToEdit.is_approved,
         price: serviceToEdit.price?.toString() || '',
         features: serviceToEdit.features?.length ? serviceToEdit.features : [''],
         service_type: serviceToEdit.service_type || 'fixed_location',
@@ -481,8 +399,9 @@ const ProfilePage: React.FC = () => {
         base_longitude: serviceToEdit.base_longitude?.toString() || '',
         delivery_radius_km: serviceToEdit.delivery_radius_km?.toString() || '',
         coverage_areas: serviceToEdit.service_coverage_areas?.map(ca => ({ ...ca, temp_id: ca.id || Date.now() + Math.random(), to_delete: false })) || [],
-        default_total_capacity: serviceToEdit.default_total_capacity?.toString() || '1',
+        default_total_capacity: serviceToEdit.default_total_capacity?.toString() || '1', // Use service's value or default
         default_is_available: serviceToEdit.default_is_available === undefined ? true : serviceToEdit.default_is_available,
+        is_approved: serviceToEdit.is_approved, // Load current visibility status
       });
   
       const existingImages = serviceToEdit.service_images || [];
@@ -492,10 +411,10 @@ const ProfilePage: React.FC = () => {
         if (urlData.publicUrl) {
           setMainImage({
             preview: urlData.publicUrl,
-            file: new File([], mainImgRecord.storage_path.split('/').pop() || "main_existing.jpg", { type: "image/jpeg" }),
+            file: new File([], mainImgRecord.storage_path.split('/').pop() || "main_existing.jpg", { type: "image/jpeg" }), // Placeholder file
             isMain: true,
-            id: mainImgRecord.id,
-            storage_path: mainImgRecord.storage_path,
+            id: mainImgRecord.id, // Store existing image ID
+            storage_path: mainImgRecord.storage_path, // Store existing storage_path
           });
         }
       }
@@ -506,14 +425,15 @@ const ProfilePage: React.FC = () => {
           const { data: urlData } = supabase.storage.from('service-images').getPublicUrl(img.storage_path);
           return {
             preview: urlData.publicUrl || '',
-            file: new File([], img.storage_path.split('/').pop() || "gallery_existing.jpg", { type: "image/jpeg" }),
-            id: img.id,
-            storage_path: img.storage_path,
+            file: new File([], img.storage_path.split('/').pop() || "gallery_existing.jpg", { type: "image/jpeg" }), // Placeholder
+            id: img.id, // Store existing image ID
+            storage_path: img.storage_path, // Store existing storage_path
             isMain: false,
           };
-        }).filter(img => img.preview)
+        }).filter(img => img.preview) // Ensure only images with valid previews are added
       );
     } else {
+      // For new service, ensure is_approved is set from initialServiceFormData
       setServiceFormData(prev => ({ ...initialServiceFormData, id: undefined }));
     }
     setShowServiceForm(true);
@@ -521,42 +441,55 @@ const ProfilePage: React.FC = () => {
   
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>, isMain: boolean = false) => {
     const files = e.target.files;
-    if (!files) return;
-    const maxSize = 5 * 1024 * 1024; 
+    if (!files || files.length === 0) return;
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    
+    // For single main image or multiple gallery images
     Array.from(files).forEach(file => {
-      if (file.size > maxSize) {
-        toast.error('El archivo es demasiado grande. Máximo 5MB.');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (eventReader) => {
-        const preview = eventReader.target?.result as string;
-        const imageUpload: ImageUpload = { file, preview, isMain };
-        if (isMain) {
-          if (mainImage?.storage_path) setImagesToDelete(prev => [...prev, mainImage.storage_path!]);
-          setMainImage(imageUpload);
-        } else {
-          setGalleryImages(prev => {
-            if (prev.length < 5) return [...prev, imageUpload];
-            toast.warn('Máximo 5 imágenes de galería.');
-            return prev;
-          });
+        if (file.size > maxSize) {
+            toast.error('El archivo es demasiado grande. El tamaño máximo es 5MB.');
+            return; // Skip this file
         }
-      };
-      reader.readAsDataURL(file);
+        const reader = new FileReader();
+        reader.onload = (eventReader) => {
+            const preview = eventReader.target?.result as string;
+            const imageUpload: ImageUpload = { file, preview, isMain };
+
+            if (isMain) {
+                // If there's an existing main image (from DB), mark it for deletion
+                if (mainImage?.storage_path) {
+                    setImagesToDelete(prev => [...new Set([...prev, mainImage.storage_path!])]);
+                }
+                setMainImage(imageUpload);
+            } else {
+                setGalleryImages(prev => {
+                    if (prev.length < 5) {
+                        return [...prev, imageUpload];
+                    } else {
+                        toast.warn('Puedes subir un máximo de 5 imágenes a la galería.');
+                        return prev;
+                    }
+                });
+            }
+        };
+        reader.readAsDataURL(file);
     });
-    e.target.value = ''; 
+    e.target.value = ''; // Reset file input to allow selecting the same file again if needed
   };
 
   const removeImage = (indexOrPath: number | string, isMain: boolean = false) => {
     if (isMain && mainImage) {
-      if (mainImage.storage_path) setImagesToDelete(prev => [...new Set([...prev, mainImage.storage_path!])]);
+      if (mainImage.storage_path) { // If it's an existing image from DB
+        setImagesToDelete(prev => [...new Set([...prev, mainImage.storage_path!])]);
+      }
       setMainImage(null);
-    } else if (typeof indexOrPath === 'number') {
+    } else if (typeof indexOrPath === 'number') { // Removing a gallery image by index (could be new or existing if order is stable)
         const imgToRemove = galleryImages[indexOrPath];
-        if (imgToRemove?.storage_path) setImagesToDelete(prev => [...new Set([...prev, imgToRemove.storage_path!])]);
+        if (imgToRemove?.storage_path) { // If it's an existing image from DB
+            setImagesToDelete(prev => [...new Set([...prev, imgToRemove.storage_path!])]);
+        }
         setGalleryImages(prev => prev.filter((_, i) => i !== indexOrPath));
-    } else if (typeof indexOrPath === 'string') {
+    } else if (typeof indexOrPath === 'string') { // Removing gallery image by storage_path (definitely existing)
         setImagesToDelete(prev => [...new Set([...prev, indexOrPath])]);
         setGalleryImages(prev => prev.filter(img => img.storage_path !== indexOrPath));
     }
@@ -583,7 +516,12 @@ const ProfilePage: React.FC = () => {
   const handleServiceInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = type === 'checkbox' ? (e.target as HTMLInputElement).checked : undefined;
-    setServiceFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    
+    if (name === "is_approved_visibility") { // Handle the specific visibility checkbox
+        setServiceFormData(prev => ({ ...prev, is_approved: checked }));
+    } else {
+        setServiceFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    }
   };
 
   const handleFeatureChange = (index: number, value: string) => {
@@ -608,13 +546,15 @@ const ProfilePage: React.FC = () => {
   const handleRemoveCoverageArea = (temp_id_or_id: string | number) => {
     setServiceFormData(prev => {
         const updatedAreas = prev.coverage_areas.map(area => {
-            if (area.id && (area.id === temp_id_or_id || area.temp_id === temp_id_or_id)) {
+            if (area.id && (area.id === temp_id_or_id || area.temp_id === temp_id_or_id)) { // Check against both temp_id and id if area might be existing
                 return { ...area, to_delete: true }; 
             }
             return area;
         }).filter(area => {
+            // If it's a new area (no 'id') and matches temp_id_or_id, filter it out directly
             if (!area.id && area.temp_id === temp_id_or_id) return false;
-            return !(area.id && area.to_delete && (area.id === temp_id_or_id || area.temp_id === temp_id_or_id));
+            // Keep areas not marked for deletion (if they were existing and didn't match)
+            return !(area.to_delete && (area.id === temp_id_or_id || area.temp_id === temp_id_or_id));
         });
         return { ...prev, coverage_areas: updatedAreas };
     });
@@ -638,6 +578,40 @@ const ProfilePage: React.FC = () => {
         toast.error('Error en geocodificación.');
     } finally {
         setIsGeocoding(false);
+    }
+  };
+  
+  const handleToggleServiceVisibility = async (serviceId: string, serviceName: string, newVisibility: boolean) => {
+    if (!user?.id) {
+      toast.error('Debes estar autenticado para cambiar la visibilidad del servicio.');
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .update({ is_approved: newVisibility }) // Using is_approved for provider visibility
+        .eq('id', serviceId)
+        .eq('provider_id', user.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        toast.success(`Servicio "${serviceName}" ahora está ${newVisibility ? 'Disponible' : 'No Disponible'}.`);
+        setMyServices(prevServices =>
+          prevServices.map(s =>
+            s.id === serviceId ? { ...s, is_approved: newVisibility } : s
+          )
+        );
+        if (editingService?.id === serviceId) {
+          setEditingService(prev => prev ? ({...prev, is_approved: newVisibility }) : null);
+          setServiceFormData(prev => ({...prev, is_approved: newVisibility }));
+        }
+      }
+    } catch (err: any) {
+      toast.error(`Error al cambiar visibilidad: ${err.message}`);
+      console.error("Error toggling service visibility:", err);
     }
   };
 
@@ -721,7 +695,7 @@ const ProfilePage: React.FC = () => {
         base_latitude: serviceFormData.base_latitude ? parseFloat(serviceFormData.base_latitude) : null,
         base_longitude: serviceFormData.base_longitude ? parseFloat(serviceFormData.base_longitude) : null,
         delivery_radius_km: serviceFormData.service_type === 'delivery_area' && serviceFormData.delivery_radius_km ? parseInt(serviceFormData.delivery_radius_km, 10) : null,
-        is_approved: editingService ? (serviceFormData as any).is_approved ?? editingService.is_approved : true,
+        is_approved: serviceFormData.is_approved ?? (isEditMode ? editingService.is_approved : true), // Use form value, or existing, or true for new
         rating: editingService?.rating || 0, review_count: editingService?.reviewCount || 0,
       };
   
@@ -865,13 +839,11 @@ const ProfilePage: React.FC = () => {
     );
   }
   
+  // Main JSX Return
   return (
     <div className="bg-gray-50 py-8 sm:py-12">
       <div className="container-custom max-w-5xl">
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Mi Cuenta</h1>
-        </div>
-
+        {/* ... Tabs and Profile Form ... */}
         <div className="flex flex-wrap border-b border-gray-300 mb-8">
           <button
             onClick={() => setActiveTab('profile')}
@@ -964,7 +936,7 @@ const ProfilePage: React.FC = () => {
               </div>
             ) : !showServiceForm && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {myServices.map(service => ( // service is ProviderService here
+                {myServices.map(service => ( 
                     <div key={service.id} className="bg-white rounded-xl shadow-lg overflow-hidden group hover:shadow-xl transition-shadow duration-300">
                         <Link to={`/service/${service.id}`} className="block">
                             <img src={service.imageUrl || 'https://placehold.co/300x200?text=Sin+Imagen'} alt={service.name} className="w-full h-48 object-cover" onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/300x200?text=Error+Img'; }}/>
@@ -974,6 +946,7 @@ const ProfilePage: React.FC = () => {
                             <h3 className="text-lg font-semibold text-gray-800 group-hover:text-primary-600 transition-colors">
                                 <Link to={`/service/${service.id}`}>{service.name}</Link>
                             </h3>
+                             {/* MODIFIED Visibility Button */}
                             <button
                               onClick={() => handleToggleServiceVisibility(service.id, service.name, !service.is_approved)}
                               className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors duration-150 ease-in-out
@@ -1073,6 +1046,7 @@ const ProfilePage: React.FC = () => {
                     <button onClick={() => {setShowServiceForm(false); resetServiceForm();}} className="text-gray-400 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100"><X size={22} /></button>
                   </div>
                   <form onSubmit={handleServiceSubmit} className="space-y-3 sm:space-y-4 text-sm">
+                    {/* ... other form fields ... */}
                     <div><label htmlFor="name" className="block text-xs font-medium text-gray-700 mb-0.5">Nombre del Servicio*</label><input type="text" name="name" id="name" value={serviceFormData.name} onChange={handleServiceInputChange} required className="w-full p-2 border rounded-md"/></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
                         <div><label htmlFor="categoryId" className="block text-xs font-medium">Categoría*</label><select name="categoryId" id="categoryId" value={serviceFormData.categoryId} onChange={e => setServiceFormData(prev => ({...prev, categoryId: e.target.value, subcategoryId: ''}))} required className="w-full p-2 border rounded-md"><option value="">Seleccionar</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
@@ -1081,6 +1055,19 @@ const ProfilePage: React.FC = () => {
                     <div><label htmlFor="shortDescription" className="block text-xs font-medium">Desc. Corta* (Máx 150)</label><input type="text" name="shortDescription" id="shortDescription" value={serviceFormData.shortDescription} onChange={handleServiceInputChange} required maxLength={150} className="w-full p-2 border rounded-md"/></div>
                     <div><label htmlFor="description" className="block text-xs font-medium">Desc. Detallada*</label><textarea name="description" id="description" value={serviceFormData.description} onChange={handleServiceInputChange} required rows={4} className="w-full p-2 border rounded-md"></textarea></div>
                     <div><label htmlFor="price" className="block text-xs font-medium">Precio (MXN) - Vacío para 'Cotizar'</label><input type="number" name="price" id="price" value={serviceFormData.price} onChange={handleServiceInputChange} placeholder="Ej: 1500.00" min="0" step="0.01" className="w-full p-2 border rounded-md"/></div>
+                    <div>
+                        <label htmlFor="is_approved_visibility" className="flex items-center text-xs font-medium text-gray-700 cursor-pointer mt-2 mb-1">
+                        <input
+                            type="checkbox"
+                            name="is_approved" // Connect to is_approved in ServiceFormData
+                            id="is_approved_visibility"
+                            checked={serviceFormData.is_approved ?? true} // Default to true if undefined (for new services)
+                            onChange={handleServiceInputChange} // Uses the existing handler
+                            className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 mr-2 shadow-sm"
+                        />
+                        Marcar como Disponible (visible para clientes)
+                        </label>
+                    </div>
                     <div>
                       <label htmlFor="service_type" className="block text-xs font-medium">Tipo de Ubicación*</label>
                       <select name="service_type" id="service_type" value={serviceFormData.service_type} onChange={handleServiceInputChange} className="w-full p-2 border rounded-md">
@@ -1127,53 +1114,31 @@ const ProfilePage: React.FC = () => {
                     </div>
                     <div> <label className="block text-xs font-medium">Imagen Principal*</label><div className={`relative border-2 border-dashed rounded-lg p-3 ${mainImage ? 'border-green-500' : 'border-gray-300'}`}><input type="file" accept="image/*" onChange={(e) => handleImageSelect(e, true)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>{mainImage ? (<div className="relative group"><img src={mainImage.preview} alt="Preview" className="w-full h-32 object-cover rounded-md"/><button type="button" onClick={() => removeImage(0, true)} className="absolute top-1 right-1"><Trash2 size={14}/></button></div>) : (<div className="text-center py-8"><Upload className="mx-auto h-8 w-8" /><p className="mt-1 text-xs">Clic o arrastra (Max 5MB)</p></div>)}</div></div>
                     <div>
-  <label className="block text-xs font-medium text-gray-700 mb-1">
-    Galería de Imágenes (hasta 5 adicionales)
-  </label>
-  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-    {galleryImages.map((img, idx) => (
-      <div key={img.id || idx} className="relative group aspect-square">
-        <img
-          src={img.preview}
-          alt={`Galería ${idx + 1}`}
-          className="w-full h-full object-cover rounded-md border border-gray-200"
-        />
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent event bubbling
-            removeImage(img.storage_path || idx, false);
-          }}
-          className="absolute top-1 right-1 bg-white/80 hover:bg-white rounded-full p-0.5 shadow-md transition-opacity opacity-0 group-hover:opacity-100 z-10"
-        >
-          <Trash2 size={12} className="text-red-500" />
-        </button>
-      </div>
-    ))}
-    {galleryImages.length < 5 && (
-      // This is the clickable area for adding new gallery images.
-      // We ensure it doesn't incorrectly capture clicks from other elements.
-      <div className="relative border-2 border-dashed border-gray-300 rounded-md h-full min-h-[6rem] flex items-center justify-center hover:border-primary-500 transition-colors aspect-square">
-        <label
-          htmlFor="galleryUpload" // Link label to the input
-          className="absolute inset-0 w-full h-full flex flex-col items-center justify-center cursor-pointer p-2" // Make label cover the div
-        >
-          <ImageIcon className="mx-auto h-6 w-6 text-gray-400" />
-          <p className="mt-1 text-xs text-gray-500 text-center">Añadir</p>
-        </label>
-        <input
-          id="galleryUpload" // ID for the label to point to
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          multiple
-          onChange={(e) => handleImageSelect(e, false)}
-          className="opacity-0 w-0 h-0" // Keep it completely hidden and out of layout flow
-          onClick={(e) => e.stopPropagation()} // Stop click from propagating further if needed
-        />
-      </div>
-    )}
-  </div>
-</div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Galería de Imágenes (hasta 5 adicionales)</label>
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                        {galleryImages.map((img, idx) => (
+                          <div key={img.id || idx} className="relative group aspect-square">
+                            <img src={img.preview} alt={`Galería ${idx + 1}`} className="w-full h-full object-cover rounded-md border border-gray-200"/>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); removeImage(img.storage_path || idx, false);}}
+                              className="absolute top-1 right-1 bg-white/80 hover:bg-white rounded-full p-0.5 shadow-md transition-opacity opacity-0 group-hover:opacity-100 z-10"
+                            > <Trash2 size={12} className="text-red-500" /> </button>
+                          </div>
+                        ))}
+                        {galleryImages.length < 5 && (
+                          <div className="relative border-2 border-dashed border-gray-300 rounded-md h-full min-h-[6rem] flex items-center justify-center hover:border-primary-500 transition-colors aspect-square">
+                            <label htmlFor="galleryUpload" className="absolute inset-0 w-full h-full flex flex-col items-center justify-center cursor-pointer p-2" >
+                              <ImageIcon className="mx-auto h-6 w-6 text-gray-400" />
+                              <p className="mt-1 text-xs text-gray-500 text-center">Añadir</p>
+                            </label>
+                            <input id="galleryUpload" type="file" accept="image/jpeg,image/png,image/webp" multiple
+                              onChange={(e) => handleImageSelect(e, false)}
+                              onClick={(e) => e.stopPropagation()} // Stop click propagation
+                              className="opacity-0 w-0 h-0" // Keep it completely hidden
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     <div> <label className="block text-xs font-medium">Características Clave</label>{serviceFormData.features.map((feat, idx) => <div key={idx} className="flex gap-1 mb-1.5"><input type="text" value={feat} onChange={e=>handleFeatureChange(idx, e.target.value)} className="flex-1 p-2 border rounded-md" placeholder={`Característica ${idx+1}`}/>{serviceFormData.features.length > 1 && <button type="button" onClick={()=>handleRemoveFeature(idx)}><Trash2 size={14}/></button>}</div>)}<button type="button" onClick={handleAddFeature} className="text-xs text-primary-600"><Plus size={14} className="mr-1 inline"/>Agregar</button></div>
                     <div className="flex justify-end space-x-3 pt-4 border-t mt-2">
                       <button type="button" onClick={() => {setShowServiceForm(false); resetServiceForm();}} className="px-4 py-2 text-sm border rounded-lg">Cancelar</button>
