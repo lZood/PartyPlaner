@@ -5,6 +5,7 @@ import 'react-toastify/dist/ReactToastify.css';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
+import ScrollToTop from './components/utils/ScrollToTop'; 
 
 // Pages
 import HomePage from './pages/HomePage';
@@ -28,46 +29,51 @@ import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
 import { ReservationProvider } from './contexts/ReservationContext';
 
-function App() {
+const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <ReservationProvider>
-        <CartProvider>
-          <ToastContainer
-            position="top-right"
-            autoClose={3000}
-            hideProgressBar={false}
-            newestOnTop
-            closeOnClick
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            theme="light"
-          />
-          <Routes>
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={<HomePage />} />
-            <Route path="categories" element={<CategoriesPage />} />
-            <Route path="category/:categoryId" element={<CategoryPage />} />
-            <Route path="category/:categoryId/:subcategoryId" element={<ServiceListPage />} />
-            <Route path="service/:serviceId" element={<ServiceDetailPage />} />
-            <Route path="search" element={<SearchResultsPage />} />
-            <Route path="cart" element={<CartPage />} />
-            <Route path="payment" element={<PaymentPage />} />
-            <Route path="payment/success" element={<PaymentSuccessPage />} />
-            <Route path="about" element={<AboutPage />} />
-            <Route path="contact" element={<ContactPage />} />
-            <Route path="faq" element={<FaqPage />} />
-            <Route path="blog" element={<BlogPage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-          </Routes>
-        </CartProvider>
-      </ReservationProvider>
-    </AuthProvider>
+    <Router>
+      <ScrollToTop /> {/* <--- AÑADE EL COMPONENTE AQUÍ */}
+      <AuthProvider>
+        <ReservationProvider> {/* Asegúrate que este Provider esté correctamente implementado */}
+          <CartProvider>
+            <ToastContainer
+              position="top-right"
+              autoClose={3000}
+              hideProgressBar={false}
+              newestOnTop={false}
+              closeOnClick
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              theme="colored"
+            />
+            <Suspense fallback={<div className="flex justify-center items-center min-h-screen text-xl">Cargando página...</div>}>
+              <Routes>
+                <Route path="/" element={<MainLayout />}>
+                  <Route index element={<HomePage />} />
+                  <Route path="categories" element={<CategoriesPage />} />
+                  <Route path="category/:categoryId" element={<CategoryPage />} />
+                  <Route path="category/:categoryId/:subcategoryId" element={<CategoryPage />} /> {/* Para subcategorías */}
+                  <Route path="service/:serviceId" element={<ServiceDetailPage />} />
+                  <Route path="search" element={<SearchResultsPage />} />
+                  <Route path="cart" element={<CartPage />} />
+                  <Route path="checkout" element={<PaymentPage />} />
+                  <Route path="payment-success" element={<PaymentSuccessPage />} />
+                  <Route path="profile" element={<ProfilePage />} />
+                  <Route path="about" element={<AboutPage />} /> {/* Asumiendo ruta */}
+                  <Route path="contact" element={<ContactPage />} /> {/* Asumiendo ruta */}
+                  <Route path="blog" element={<BlogPage />} /> {/* Asumiendo ruta */}
+                  <Route path="faq" element={<FaqPage />} />
+                  <Route path="*" element={<NotFoundPage />} />
+                </Route>
+              </Routes>
+            </Suspense>
+          </CartProvider>
+        </ReservationProvider>
+      </AuthProvider>
+    </Router>
   );
-}
+};
 
 export default App;
