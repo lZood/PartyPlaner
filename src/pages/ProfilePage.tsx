@@ -627,7 +627,7 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
 
     const isEditMode = !!editingService;
     const currentServiceId = editingService?.id;
-    let tempImagesToDeleteFromStorage = [...imagesToDelete]; // Tracks storage paths to delete
+    let tempImagesToDeleteFromStorage = [...imagesToDelete];
 
     try {
         // 1. Guardar/Actualizar Servicio Principal para obtener/confirmar finalServiceId
@@ -666,7 +666,7 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
         const finalServiceId = savedServiceData.id;
 
         // --- MANEJO DE IMÁGENES ---
-        let finalMainImageStoragePath: string | null = null; // Path de la imagen que SERÁ la principal
+        let finalMainImageStoragePath: string | null = null;
         let newMainImageUploaded = false;
 
         // A. Subir nueva imagen principal si se seleccionó un archivo
@@ -677,158 +677,155 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
             if (uploadError) throw uploadError;
             finalMainImageStoragePath = uploadData.path;
             newMainImageUploaded = true;
-            // Si había una imagen principal anterior y se subió una nueva, la anterior se debe eliminar del storage
-            if (editingService?.service_images?.find(img => img.is_main_image)?.storage_path &&
-                editingService?.service_images?.find(img => img.is_main_image)?.storage_path !== finalMainImageStoragePath) { // Verifica que no sea la misma imagen (poco probable si se sube nueva)
-                tempImagesToDeleteFromStorage.push(editingService.service_images.find(img => img.is_main_image)!.storage_path);
+            
+            const oldMainImageRecord = editingService?.service_images?.find(img => img.is_main_image);
+            if (oldMainImageRecord?.storage_path && oldMainImageRecord.storage_path !== finalMainImageStoragePath) {
+                tempImagesToDeleteFromStorage.push(oldMainImageRecord.storage_path);
             }
         } else if (mainImage && mainImage.storage_path) {
-            // Se mantuvo una imagen principal existente (no se subió archivo nuevo para ella)
             finalMainImageStoragePath = mainImage.storage_path;
+        } else if (!mainImage && isEditMode) {
+            const oldMainImageRecord = editingService?.service_images?.find(img => img.is_main_image);
+            if (oldMainImageRecord?.storage_path) {
+                 tempImagesToDeleteFromStorage.push(oldMainImageRecord.storage_path);
+            }
+            // finalMainImageStoragePath permanece null
         }
-        // Si !mainImage, significa que la imagen principal fue explícitamente deseleccionada/eliminada.
-        // Si había una antes, se marcará para eliminar del storage.
-        else if (!mainImage && isEditMode && editingService?.service_images?.find(img => img.is_main_image)) {
-             tempImagesToDeleteFromStorage.push(editingService.service_images.find(img => img.is_main_image)!.storage_path);
-             // finalMainImageStoragePath permanece null
-        }
-
 
         // B. Subir nuevas imágenes de galería
-        const uploadedGalleryImageObjects: { storage_path: string, position: number, is_main_image: boolean, service_id: string }[] = [];
-        let currentGalleryPosition = 0; // Posición relativa dentro de las de galería
-
+        const uploadedGalleryImageObjects: { storage_path: string }[] = []; // Solo necesitamos el path para nuevas
+        
         for (const img of galleryImages) {
-            if (img.file.size > 0) { // Es un archivo nuevo para subir
-                const galleryFileName = `public/${user.id}/${finalServiceId}/${Date.now()}_gallery_${currentGalleryPosition}_${img.file.name.replace(/\s/g, '_')}`;
+            if (img.file.size > 0) { 
+                const galleryFileName = `public/${user.id}/${finalServiceId}/${Date.now()}_gallery_${galleryImages.indexOf(img)}_${img.file.name.replace(/\s/g, '_')}`;
                 const { data: uploadData, error: uploadError } = await supabase.storage
                     .from('service-images').upload(galleryFileName, img.file);
                 if (uploadError) throw uploadError;
-                uploadedGalleryImageObjects.push({
-                    storage_path: uploadData.path,
-                    position: currentGalleryPosition++, // Se ajustará después si hay principal
-                    is_main_image: false,
-                    service_id: finalServiceId
-                });
+                uploadedGalleryImageObjects.push({ storage_path: uploadData.path });
             }
         }
         
-        // C. Identificar imágenes existentes a mantener o eliminar
-        const keptExistingGalleryImageRecords: Partial<ServiceImage>[] = [];
-        if (isEditMode && editingService?.service_images) {
-            editingService.service_images.forEach(existingImg => {
-                if (!existingImg.is_main_image) { // Solo procesar imágenes de galería aquí
-                    const stillInGallery = galleryImages.find(uiImg => uiImg.id === existingImg.id && uiImg.storage_path === existingImg.storage_path);
-                    if (stillInGallery) {
-                        keptExistingGalleryImageRecords.push({
-                            id: existingImg.id,
-                            storage_path: existingImg.storage_path,
-                            is_main_image: false,
-                            position: 0, // Se reasignará la posición
-                            service_id: finalServiceId,
-                        });
-                    } else {
-                        // Esta imagen de galería existente fue eliminada por el usuario
-                        tempImagesToDeleteFromStorage.push(existingImg.storage_path);
-                    }
+        // C. Identificar imágenes de galería existentes a mantener y las que se eliminaron del UI
+        const keptExistingGalleryImageStoragePaths = new Set<string>();
+        if (isEditMode) {
+            galleryImages.forEach(uiImg => {
+                if (uiImg.storage_path && uiImg.id) { // Si es una imagen existente que se mantuvo en el UI
+                    keptExistingGalleryImageStoragePaths.add(uiImg.storage_path);
+                }
+            });
+
+            editingService?.service_images?.forEach(existingDbImg => {
+                if (!existingDbImg.is_main_image && !keptExistingGalleryImageStoragePaths.has(existingDbImg.storage_path)) {
+                    // Esta imagen de galería de la BD ya no está en el UI, marcar para eliminar del storage
+                    tempImagesToDeleteFromStorage.push(existingDbImg.storage_path);
                 }
             });
         }
-        tempImagesToDeleteFromStorage = [...new Set(tempImagesToDeleteFromStorage)]; // Deduplicar
+        tempImagesToDeleteFromStorage = [...new Set(tempImagesToDeleteFromStorage)];
 
-        // D. Construir el array final para upsert en service_images
+        // D. ANTES del UPSERT final, asegurarse que no haya otra imagen principal en la DB para este servicio
+        if (finalServiceId) { // Solo si tenemos un ID de servicio (creado o editado)
+            const updatePayloadMainImage: {is_main_image: boolean} = { is_main_image: false };
+            if(finalMainImageStoragePath){ // Si vamos a tener una imagen principal
+                 await supabase
+                    .from('service_images')
+                    .update(updatePayloadMainImage)
+                    .eq('service_id', finalServiceId)
+                    .neq('storage_path', finalMainImageStoragePath); // Desmarca todas MENOS la nueva principal
+            } else { // Si NO vamos a tener imagen principal (fue eliminada o nunca hubo)
+                 await supabase
+                    .from('service_images')
+                    .update(updatePayloadMainImage)
+                    .eq('service_id', finalServiceId); // Desmarca todas
+            }
+        }
+
+        // E. Construir el array final para upsert en service_images
         const imagesForDbUpsert: Partial<ServiceImage>[] = [];
         let finalPositionCounter = 0;
 
-        // D.1: Si hay una imagen principal (nueva o existente)
         if (finalMainImageStoragePath) {
-            const existingMainRecordForUpsert = isEditMode && !newMainImageUploaded // Si no se subió nueva img principal
-                ? editingService?.service_images?.find(img => img.storage_path === finalMainImageStoragePath)
-                : undefined;
-
-            imagesForDbUpsert.push({
-                id: existingMainRecordForUpsert?.id, // ID si es existente, undefined si es nueva
+            const mainImageEntry: Partial<ServiceImage> = {
                 service_id: finalServiceId,
                 storage_path: finalMainImageStoragePath,
                 is_main_image: true,
                 position: finalPositionCounter++,
-            });
+            };
+            // Si estamos editando y la imagen principal es una que ya existía (no se subió un nuevo archivo para ella),
+            // necesitamos su ID para que el upsert la actualice en lugar de crear una nueva.
+            if (isEditMode && !newMainImageUploaded && mainImage?.id) {
+                mainImageEntry.id = mainImage.id;
+            }
+            // Si es una imagen principal completamente nueva (newMainImageUploaded = true), NO se pone ID.
+            imagesForDbUpsert.push(mainImageEntry);
         }
 
-        // D.2: Añadir imágenes de galería (mantenidas y nuevas)
-        // Reordenar keptExistingGalleryImageRecords según el orden actual en galleryImages UI state
-        const orderedKeptGalleryImages: Partial<ServiceImage>[] = [];
+        // Añadir imágenes de galería que se mantuvieron (existentes)
         galleryImages.forEach(uiImg => {
-            if (uiImg.id && uiImg.storage_path) { // Es una imagen existente
-                const record = keptExistingGalleryImageRecords.find(k => k.id === uiImg.id);
-                if (record) {
-                    orderedKeptGalleryImages.push({ ...record, position: finalPositionCounter++ });
-                }
+            if (uiImg.id && uiImg.storage_path && keptExistingGalleryImageStoragePaths.has(uiImg.storage_path)) {
+                imagesForDbUpsert.push({
+                    id: uiImg.id, // ID existente
+                    service_id: finalServiceId,
+                    storage_path: uiImg.storage_path,
+                    is_main_image: false,
+                    position: finalPositionCounter++,
+                });
             }
         });
-        imagesForDbUpsert.push(...orderedKeptGalleryImages);
-
+        
+        // Añadir nuevas imágenes de galería subidas (sin ID)
         uploadedGalleryImageObjects.forEach(newImgObj => {
-            imagesForDbUpsert.push({ ...newImgObj, position: finalPositionCounter++ });
+            imagesForDbUpsert.push({
+                service_id: finalServiceId,
+                storage_path: newImgObj.storage_path,
+                is_main_image: false,
+                position: finalPositionCounter++,
+            });
         });
-
-
-        // E. ANTES del UPSERT final, asegurarse que no haya otra imagen principal en la DB para este servicio
-        if (isEditMode && finalServiceId) {
-            const updatePayload: {is_main_image: boolean, position?: number} = { is_main_image: false };
-            // Si la nueva imagen principal no es la que ya era principal,
-            // o si la imagen principal fue eliminada (finalMainImageStoragePath es null)
-            // desmarcamos todas las demás como principal.
-            // Si la imagen principal se mantuvo, no es necesario este update específico,
-            // el upsert la actualizará.
+        
+        // F. Eliminar de la BD los registros de service_images que ya no aplican
+        // (ej. imágenes de galería que fueron deseleccionadas o una principal que fue reemplazada y no desmarcada arriba)
+        if (isEditMode && editingService?.service_images) {
+            const currentImagePathsInDbPayload = new Set(imagesForDbUpsert.map(img => img.storage_path));
+            const dbImagesToDeleteCompletely = editingService.service_images
+                .filter(dbImg => !currentImagePathsInDbPayload.has(dbImg.storage_path))
+                .map(dbImg => dbImg.id);
             
-            // Si hay una nueva imagen principal definida, cualquier otra imagen que PUEDA haber sido principal debe desmarcarse.
-            if(finalMainImageStoragePath){
-                 await supabase
-                    .from('service_images')
-                    .update(updatePayload)
-                    .eq('service_id', finalServiceId)
-                    .neq('storage_path', finalMainImageStoragePath); // Desmarca todas MENOS la nueva principal
-            } else {
-                 // Si no hay imagen principal (fue eliminada), desmarca todas.
-                 await supabase
-                    .from('service_images')
-                    .update(updatePayload)
-                    .eq('service_id', finalServiceId);
+            if (dbImagesToDeleteCompletely.length > 0) {
+                await supabase.from('service_images').delete().in('id', dbImagesToDeleteCompletely);
             }
         }
 
 
-        // F. Upsert de imágenes a la base de datos
+        // G. Upsert de imágenes a la base de datos
         if (imagesForDbUpsert.length > 0) {
             const { error: siError } = await supabase
                 .from('service_images')
-                .upsert(imagesForDbUpsert, { onConflict: 'id' });
+                .upsert(imagesForDbUpsert, { onConflict: 'id' }); 
             if (siError) {
                 console.error('Supabase service_images upsert error:', siError);
-                throw siError;
+                throw siError; 
             }
-        } else if (isEditMode && finalServiceId) { 
-            // Si no hay imágenes para upsert (todas fueron eliminadas)
+        } else if (finalServiceId) { // Si no hay imágenes para upsert (ej. todas eliminadas)
             await supabase.from('service_images').delete().eq('service_id', finalServiceId);
         }
-
-        // G. Eliminar archivos del Storage
+        
+        // H. Eliminar archivos del Storage
         if (tempImagesToDeleteFromStorage.length > 0) {
             const { error: storageError } = await supabase.storage.from('service-images').remove(tempImagesToDeleteFromStorage);
             if (storageError) {
                 console.warn("Advertencia al eliminar imágenes del storage:", storageError.message);
             }
         }
-        setImagesToDelete([]); // Resetear el array local
+        setImagesToDelete([]); 
 
-        // H. Manejar Áreas de Cobertura
+        // I. Manejar Áreas de Cobertura
         if (isEditMode && currentServiceId) {
             const areasToDeleteInDb = serviceFormData.coverage_areas.filter(a => a.id && a.to_delete).map(a => a.id!);
             if (areasToDeleteInDb.length > 0) {
                 await supabase.from('service_coverage_areas').delete().in('id', areasToDeleteInDb);
             }
-            if (serviceFormData.service_type !== 'multiple_areas') { // Si cambió de multiple_areas a otro tipo
+            if (serviceFormData.service_type !== 'multiple_areas') { 
                 await supabase.from('service_coverage_areas').delete().eq('service_id', currentServiceId);
             }
         }
@@ -836,7 +833,7 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
             const coverageAreasToUpsert = serviceFormData.coverage_areas
                 .filter(a => a.area_name && a.area_name.trim() !== '' && !a.to_delete)
                 .map(a => ({ 
-                    id: a.id, // Para upsert
+                    id: a.id, 
                     service_id: finalServiceId, 
                     area_name: a.area_name!, 
                     city: a.city || null, 
@@ -849,7 +846,7 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
             }
         }
 
-        // I. Default Availability for NEW services
+        // J. Default Availability for NEW services
         if (!isEditMode) {
             const availabilityEntries = [];
             const today = new Date();
