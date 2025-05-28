@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Outlet } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom'; // No BrowserRouter/Router import here
 import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
 import { ReservationProvider } from './contexts/ReservationContext';
@@ -10,9 +10,16 @@ import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 
 import MainLayout from './layouts/MainLayout';
-import ScrollToTop from './utils/ScrollToTop'; // <--- RUTA CORREGIDA
+import ScrollToTop from './components/utils/ScrollToTop';
 
+// ... (your lazy loaded page imports)
 const HomePage = lazy(() => import('./pages/HomePage'));
+// ... (other imports)
+const AboutPage = lazy(() => import('./pages/AboutPage'));
+const ContactPage = lazy(() => import('./pages/ContactPage'));
+const BlogPage = lazy(() => import('./pages/BlogPage'));
+const FaqPage = lazy(() => import('./pages/FaqPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
 const CategoryPage = lazy(() => import('./pages/CategoryPage'));
 const ServiceDetailPage = lazy(() => import('./pages/ServiceDetailPage'));
@@ -21,16 +28,11 @@ const CartPage = lazy(() => import('./pages/CartPage'));
 const PaymentPage = lazy(() => import('./pages/PaymentPage'));
 const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-const AboutPage = lazy(() => import('./pages/AboutPage'));
-const ContactPage = lazy(() => import('./pages/ContactPage'));
-const BlogPage = lazy(() => import('./pages/BlogPage'));
-const FaqPage = lazy(() => import('./pages/FaqPage'));
-const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 
 const App: React.FC = () => {
   return (
-    <Router>
+    <> {/* Or a React.Fragment, or directly your providers if they don't need a wrapper here */}
       <ScrollToTop />
       <AuthProvider>
         <ReservationProvider>
@@ -71,7 +73,7 @@ const App: React.FC = () => {
           </CartProvider>
         </ReservationProvider>
       </AuthProvider>
-    </Router>
+    </>
   );
 };
 
