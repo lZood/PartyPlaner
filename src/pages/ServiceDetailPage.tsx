@@ -60,7 +60,12 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availabilit
     for (let day = 1; day <= daysInSelectedMonth; day++) {
       const currentDate = new Date(displayYear, displayMonth, day);
       currentDate.setHours(0, 0, 0, 0);
-      const dateString = currentDate.toISOString().split('T')[0];
+      // const dateString = currentDate.toISOString().split('T')[0]; // Original
+      // FIX: Construct dateString from local parts to match selectedEventDateForService format
+      const year = currentDate.getFullYear();
+      const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+      const dayNum = currentDate.getDate().toString().padStart(2, '0');
+      const dateString = `${year}-${month}-${dayNum}`;
       
       const dayAvailability = availability.find(a => a.date === dateString);
       let cellClass = "p-1 border text-center text-xs sm:text-sm h-10 sm:h-12 flex items-center justify-center transition-all duration-150 ease-in-out ";
@@ -142,24 +147,22 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availabilit
 
 const ServiceDetailPage: React.FC = () => {
   const { serviceId } = useParams<{ serviceId: string }>();
-  const { cart, addToCart } = useCart(); // Removed isInCart as we'll check with event date
-  const { isAuthenticated, user, addFavorite, removeFavorite, isFavorite } = useAuth(); // Auth context for favorites
+  const { cart, addToCart } = useCart(); 
+  const { isAuthenticated, user, addFavorite, removeFavorite, isFavorite } = useAuth(); 
   const { selectedDate: globalSelectedDate } = useReservation();
-  const navigate = useNavigate(); // For navigation
+  const navigate = useNavigate(); 
   
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  // const [selectedOptions, setSelectedOptions] = useState<string[]>([]); // Not used in current logic, can be added if needed
 
   const [service, setService] = useState<AppServiceType | null>(null);
   const [category, setCategory] = useState<AppCategoryType | null>(null);
   const [subcategory, setSubcategory] = useState<AppSubcategoryType | null>(null);
-  // const [coverageAreas, setCoverageAreas] = useState<ServiceCoverageArea[]>([]); // Can be derived from service.coverage_areas
   const [serviceAvailabilities, setServiceAvailabilities] = useState<ServiceAvailability[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [selectedEventDateForService, setSelectedEventDateForService] = useState<string | null>(null);
-  const [isFavoritingDetail, setIsFavoritingDetail] = useState(false); // State for favorite button loading
+  const [isFavoritingDetail, setIsFavoritingDetail] = useState(false); 
 
   const isCurrentlyFavoriteDetail = service ? isFavorite(service.id) : false;
 
@@ -197,7 +200,7 @@ const ServiceDetailPage: React.FC = () => {
       try {
         const { data: serviceData, error: serviceError } = await supabase
           .from('services')
-          .select('*, service_coverage_areas(*)') // Fetch coverage areas here
+          .select('*, service_coverage_areas(*)') 
           .eq('id', serviceId)
           .maybeSingle();
 
@@ -244,7 +247,7 @@ const ServiceDetailPage: React.FC = () => {
         
         const mappedAvailabilities: ServiceAvailability[] = (availabilityDataSupabase || []).map((a: any) => ({
             id: a.id,
-            serviceId: a.service_id, // Ensure this maps correctly
+            serviceId: a.service_id, 
             date: a.date,
             totalCapacity: a.total_capacity,
             bookedCapacity: a.booked_capacity,
@@ -259,7 +262,7 @@ const ServiceDetailPage: React.FC = () => {
           categoryId: serviceData.category_id, subcategoryId: serviceData.subcategory_id,
           rating: serviceData.rating, reviewCount: serviceData.review_count,
           features: serviceData.features || [], 
-          availability: mappedAvailabilities, // Use the mapped availabilities
+          availability: mappedAvailabilities, 
           options: serviceData.options || [], service_type: serviceData.service_type,
           specific_address: serviceData.specific_address, base_latitude: serviceData.base_latitude,
           base_longitude: serviceData.base_longitude, delivery_radius_km: serviceData.delivery_radius_km,
@@ -269,9 +272,8 @@ const ServiceDetailPage: React.FC = () => {
           coverage_areas: serviceData.service_coverage_areas || [],
         };
         setService(populatedService);
-        // setCoverageAreas(serviceData.service_coverage_areas || []); // This can be accessed via service.coverage_areas
 
-        if (globalSelectedDate && mappedAvailabilities.length > 0) { // Check if mappedAvailabilities has items
+        if (globalSelectedDate && mappedAvailabilities.length > 0) { 
             const globalDateStr = globalSelectedDate.toISOString().split('T')[0];
             const isAvailableGlobal = mappedAvailabilities.find(
                 (a: ServiceAvailability) => a.date === globalDateStr && a.isAvailable && a.totalCapacity > a.bookedCapacity
@@ -292,7 +294,7 @@ const ServiceDetailPage: React.FC = () => {
       finally { setIsLoading(false); }
     };
     fetchServiceDetails();
-  }, [serviceId, globalSelectedDate]); // Added supabase to dependencies if it's not stable
+  }, [serviceId, globalSelectedDate, supabase]); 
 
   useEffect(() => {
     if (service) { document.title = `${service.name} | CABETG Party Planner`; window.scrollTo(0, 0); }
@@ -302,19 +304,23 @@ const ServiceDetailPage: React.FC = () => {
   const calculateTotalPrice = (): number | null => {
     if (!service || typeof service.price !== 'number') return null;
     let currentPrice = service.price;
-    // Logic for selectedOptions can be added here if they affect price
     return currentPrice * quantity;
   };
 
   const totalPrice = calculateTotalPrice();
   const sliderSettings = { dots: true, infinite: true, speed: 500, slidesToShow: 1, slidesToScroll: 1, arrows: true, adaptiveHeight: true };
   
-  // Corrected: Use AppServiceType for mockServicesData if that's its type
   const similarServices = service ? mockServicesData.filter((s: AppServiceType) => s.id !== serviceId && s.categoryId === service?.categoryId && s.subcategoryId === service?.subcategoryId).slice(0, 3) : [];
-  // const handleToggleOption = (optionId: string) => setSelectedOptions((prev) => prev.includes(optionId) ? prev.filter((id) => id !== optionId) : [...prev, optionId]);
   
   const handleDateSelectionInDetail = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    // date es un objeto Date local, ej: 2025-05-29T00:00:00 (Hora Local)
+    
+    // Construye la cadena YYYY-MM-DD a partir de las partes de la fecha local
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0'); // getMonth() es 0-indexado
+    const day = date.getDate().toString().padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`; // Ahora dateStr será "2025-05-29"
+  
     setSelectedEventDateForService(dateStr);
     toast.info(`Fecha seleccionada: ${date.toLocaleDateString('es-MX', {day: 'numeric', month: 'short'})}`, {position: "bottom-right", autoClose: 2000});
   };
@@ -335,18 +341,24 @@ const ServiceDetailPage: React.FC = () => {
               .eq('date', selectedEventDateForService)
               .single();
 
-          if (checkError && checkError.code !== 'PGRST116') {
+          if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means no rows found, which is handled below
               throw checkError;
           }
           
           if (!availabilityCheck || !availabilityCheck.is_available || (availabilityCheck.booked_capacity + quantity) > availabilityCheck.total_capacity) {
-              toast.error(`El servicio ya no está disponible o excede la capacidad para el ${new Date(selectedEventDateForService + 'T00:00:00Z').toLocaleDateString('es-MX', {day:'numeric', month:'short'})}. Por favor, selecciona otra fecha o ajusta la cantidad.`, {position: "bottom-right", autoClose: 4000});
+              toast.error(`El servicio ya no está disponible o excede la capacidad para el ${(() => {
+                const [year, month, day] = selectedEventDateForService.split('-').map(Number);
+                return new Date(year, month - 1, day).toLocaleDateString('es-MX', {day:'numeric', month:'short'});
+              })()}. Por favor, selecciona otra fecha o ajusta la cantidad.`, {position: "bottom-right", autoClose: 4000});
               setIsAddingToCart(false);
               return;
           }
           
-          addToCart(service, quantity, selectedEventDateForService); // Pass selectedEventDateForService
-          toast.success(`${service.name} añadido a tu lista para el ${new Date(selectedEventDateForService + 'T00:00:00Z').toLocaleDateString('es-MX', {day:'numeric', month:'short'})}!`, {position: "bottom-right"});
+          addToCart(service, quantity, selectedEventDateForService); 
+          toast.success(`${service.name} añadido a tu lista para el ${(() => {
+            const [year, month, day] = selectedEventDateForService.split('-').map(Number);
+            return new Date(year, month - 1, day).toLocaleDateString('es-MX', {day:'numeric', month:'short'});
+          })()}!`, {position: "bottom-right"});
 
       } catch (error: any) {
           toast.error(`Error al verificar disponibilidad: ${error.message}. Intenta de nuevo.`, {position: "bottom-right"});
@@ -356,11 +368,10 @@ const ServiceDetailPage: React.FC = () => {
     }
   };
   
-  // Check if the specific item (service + date + quantity) is in cart for "Ver en mi lista" button
   const itemInCart = cart.items.find(item => 
     item.service.id === serviceId && 
     item.eventDate === selectedEventDateForService &&
-    item.quantity === quantity // Optional: only show "Ver en mi lista" if quantity also matches
+    item.quantity === quantity 
   );
 
 
@@ -392,9 +403,9 @@ const ServiceDetailPage: React.FC = () => {
         onClose={() => setShowAuthModal(false)} 
         onSuccess={() => { 
             setShowAuthModal(false); 
-            if (service && user && !isCurrentlyFavoriteDetail) { // If modal was for favoriting
+            if (service && user && !isCurrentlyFavoriteDetail) { 
                 handleToggleFavoriteDetail();
-            } else if (service && selectedEventDateForService && user) { // If modal was for adding to cart
+            } else if (service && selectedEventDateForService && user) { 
                 handleAddToCart();
             }
         }} 
@@ -489,14 +500,18 @@ const ServiceDetailPage: React.FC = () => {
                 availability={serviceAvailabilities} 
                 onDateSelect={handleDateSelectionInDetail}
                 selectedServiceDate={selectedEventDateForService}
-                isLoading={isLoading} // Pass isLoading from service detail fetch
+                isLoading={isLoading} 
               />
               
               <div className="mt-4 mb-5 p-3 border border-gray-200 rounded-lg bg-gray-50 shadow-sm">
                 <h3 className="text-xs font-semibold text-gray-600 mb-0.5">Fecha seleccionada para este servicio:</h3>
                 <p className={`text-base font-medium ${selectedEventDateForService ? 'text-primary-600' : 'text-gray-500 italic'}`}>
                   {selectedEventDateForService 
-                    ? new Date(selectedEventDateForService + 'T00:00:00Z').toLocaleDateString('es-MX', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
+                    ? (() => {
+                        const [year, month, day] = selectedEventDateForService.split('-').map(Number);
+                        const localDate = new Date(year, month - 1, day);
+                        return localDate.toLocaleDateString('es-MX', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+                      })()
                     : "Ninguna. Elige del calendario."}
                 </p>
               </div>
@@ -507,7 +522,10 @@ const ServiceDetailPage: React.FC = () => {
                   <Link 
                     to="/cart" 
                     className="btn w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-lg font-medium flex items-center justify-center text-sm shadow-sm"
-                  > <ShoppingBag size={16} className="mr-2"/> Ver en mi lista ({new Date(itemInCart.eventDate + 'T00:00:00Z').toLocaleDateString('es-MX', {day: 'numeric', month: 'short'})}) </Link>
+                  > <ShoppingBag size={16} className="mr-2"/> Ver en mi lista ({(() => {
+                      const [year, month, day] = itemInCart.eventDate!.split('-').map(Number);
+                      return new Date(year, month - 1, day).toLocaleDateString('es-MX', {day: 'numeric', month: 'short'});
+                    })()}) </Link>
                 ) : (
                   <button 
                     onClick={handleAddToCart} 
@@ -516,7 +534,11 @@ const ServiceDetailPage: React.FC = () => {
                   >
                     {isAddingToCart ? <Loader2 size={18} className="animate-spin mr-2" /> : <ShoppingBag size={16} className="mr-2"/>}
                     {isAddingToCart ? 'Añadiendo...' : (service.price ? 'Añadir a Mi Lista' : 'Solicitar Cotización')}
-                    {selectedEventDateForService && !isAddingToCart && ` (${new Date(selectedEventDateForService + 'T00:00:00Z').toLocaleDateString('es-MX', {day: 'numeric', month: 'short'})})`}
+                    {selectedEventDateForService && !isAddingToCart && ` (${(() => {
+                        const [year, month, day] = selectedEventDateForService.split('-').map(Number);
+                        const localDate = new Date(year, month - 1, day);
+                        return localDate.toLocaleDateString('es-MX', {day: 'numeric', month: 'short'});
+                      })()})`}
                   </button>
                 )}
             </div>
