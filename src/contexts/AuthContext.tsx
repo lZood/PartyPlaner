@@ -1,8 +1,8 @@
 // src/contexts/AuthContext.tsx
-
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react'; // Añadir useRef
-import { createClient, User as SupabaseAuthUser, Session } from '@supabase/supabase-js'; // Añadir Session
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
+import { createClient, User as SupabaseAuthUser, Session } from '@supabase/supabase-js';
 import { toast } from 'react-toastify';
+import { AppServiceType } from '../types'; // Assuming AppServiceType is the full service type
 
 export interface AppUser {
   id: string;
@@ -18,7 +18,13 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
+  isLoadingAuth: boolean; // Renamed for clarity
   setUser: React.Dispatch<React.SetStateAction<AppUser | null>>;
+  favoriteServiceIds: string[]; // New: list of favorite service IDs
+  addFavorite: (serviceId: string) => Promise<void>; // New
+  removeFavorite: (serviceId: string) => Promise<void>; // New
+  isFavorite: (serviceId: string) => boolean; // New
+  fetchFavorites: () => Promise<void>; // New
 }
 
 const supabase = createClient(
@@ -39,23 +45,54 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const initialLoadDone = useRef(false); // Usar ref para marcar la carga inicial
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true); // Renamed
+  const initialLoadDone = useRef(false);
+  const [favoriteServiceIds, setFavoriteServiceIds] = useState<string[]>([]);
 
-  console.log(`[AuthContext] Component rendering. isLoading: ${isLoading}, isAuthenticated: ${isAuthenticated}, User: ${user ? user.id : null}`);
+  const fetchFavorites = useCallback(async () => {
+    if (user && isAuthenticated) {
+      try {
+        const { data, error } = await supabase
+          .from('favorites')
+          .select('service_id')
+          .eq('user_id', user.id);
+
+        if (error) {
+          console.error('Error fetching favorites:', error);
+          setFavoriteServiceIds([]); // Reset on error
+          return;
+        }
+        setFavoriteServiceIds(data ? data.map(fav => fav.service_id) : []);
+      } catch (err) {
+        console.error('Exception fetching favorites:', err);
+        setFavoriteServiceIds([]);
+      }
+    } else {
+      setFavoriteServiceIds([]); // Clear if not authenticated
+    }
+  }, [user, isAuthenticated]); // Dependencies for useCallback
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      fetchFavorites();
+    } else {
+      setFavoriteServiceIds([]); // Clear favorites if user logs out or is not authenticated
+    }
+  }, [isAuthenticated, user, fetchFavorites]);
+
 
   useEffect(() => {
     let isMounted = true;
-    console.log('[AuthContext] useEffect - START. isMounted:', isMounted, 'initialLoadDone.current:', initialLoadDone.current);
+    // console.log('[AuthContext] useEffect - START. isMounted:', isMounted, 'initialLoadDone.current:', initialLoadDone.current);
 
     const processUserSession = async (authUser: SupabaseAuthUser | null, source: string) => {
       if (!isMounted) {
-        console.log(`[AuthContext] processUserSession (${source}): Component unmounted. Aborting.`);
+        // console.log(`[AuthContext] processUserSession (${source}): Component unmounted. Aborting.`);
         return;
       }
 
       if (authUser && authUser.email) {
-        console.log(`[AuthContext] processUserSession (${source}): authUser found (ID: ${authUser.id}). Fetching profile.`);
+        // console.log(`[AuthContext] processUserSession (${source}): authUser found (ID: ${authUser.id}). Fetching profile.`);
         try {
           const { data: profile, error: profileError } = await supabase
             .from('users')
@@ -63,144 +100,99 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .eq('id', authUser.id)
             .single();
 
-          if (!isMounted) {
-            console.log(`[AuthContext] processUserSession (${source}): Component unmounted after profile fetch. Aborting.`);
-            return;
-          }
+          if (!isMounted) return;
 
-          if (profileError) {
+          if (profileError && profileError.code !== 'PGRST116') { // PGRST116: no rows found
             console.error(`[AuthContext] processUserSession (${source}): Error fetching profile:`, profileError);
-            const defaultAppUser: AppUser = {
-              id: authUser.id,
-              email: authUser.email,
-              name: authUser.email.split('@')[0],
-            };
-            setUser(defaultAppUser);
-            setIsAuthenticated(true);
-          } else {
-            const newAppUserData: AppUser = {
-              id: authUser.id,
-              email: authUser.email,
-              name: profile?.name || authUser.email.split('@')[0],
-              phone: profile?.phone || undefined,
-              avatar_url: profile?.avatar_url || undefined,
-            };
-            setUser(newAppUserData);
-            setIsAuthenticated(true);
-            console.log(`[AuthContext] processUserSession (${source}): Profile processed. User set.`, newAppUserData);
           }
+          const newAppUserData: AppUser = {
+            id: authUser.id,
+            email: authUser.email,
+            name: profile?.name || authUser.email.split('@')[0],
+            phone: profile?.phone || undefined,
+            avatar_url: profile?.avatar_url || undefined,
+          };
+          setUser(newAppUserData);
+          setIsAuthenticated(true);
+          // console.log(`[AuthContext] processUserSession (${source}): Profile processed. User set.`, newAppUserData);
+          // Fetch favorites after user is set
+          // await fetchFavorites(); // fetchFavorites will be called by its own useEffect dependency on user
         } catch (fetchError) {
           console.error(`[AuthContext] processUserSession (${source}): EXCEPTION during profile fetch:`, fetchError);
           setUser(null);
           setIsAuthenticated(false);
         }
       } else {
-        console.log(`[AuthContext] processUserSession (${source}): No valid authUser or email missing. Clearing user state.`);
+        // console.log(`[AuthContext] processUserSession (${source}): No valid authUser or email missing. Clearing user state.`);
         setUser(null);
         setIsAuthenticated(false);
       }
 
       if (!initialLoadDone.current) {
-        console.log(`[AuthContext] processUserSession (${source}): Initial load sequence complete. Setting isLoading to false.`);
-        setIsLoading(false);
+        // console.log(`[AuthContext] processUserSession (${source}): Initial load sequence complete. Setting isLoadingAuth to false.`);
+        setIsLoadingAuth(false);
         initialLoadDone.current = true;
       }
     };
-
-    // 1. Check for an existing session right away
-    console.log('[AuthContext] useEffect: Attempting to get initial session.');
-    supabase.auth.getSession().then(async ({ data: { session }, error: sessionError }) => {
-      if (!isMounted) {
-        console.log('[AuthContext] useEffect (getSession): Component unmounted. Aborting.');
-        return;
-      }
-      if (sessionError) {
-        console.error("[AuthContext] useEffect (getSession): Error getting initial session:", sessionError);
-        processUserSession(null, 'getSessionError');
-      } else if (session && session.user) {
-        console.log('[AuthContext] useEffect (getSession): Session found. User ID:', session.user.id);
-        // Double check with getUser for robustness, or trust session.user
-        const { data: { user: liveUser }, error: getUserError } = await supabase.auth.getUser();
+    
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (!isMounted) return;
-        if (getUserError || !liveUser) {
-            console.warn('[AuthContext] useEffect (getSession): User from session.user not confirmed by getUser. Using session.user for now or clearing.', { getUserError, liveUser, sessionUser: session.user });
-             processUserSession(session.user, 'getSession-liveUserError'); // Fallback to session.user or handle as error
-        } else {
-            processUserSession(liveUser, 'getSession-liveUserSuccess');
-        }
-
-      } else {
-        console.log('[AuthContext] useEffect (getSession): No active session found.');
-        processUserSession(null, 'getSessionNoSession');
-      }
-    }).catch(error => {
-        if (!isMounted) return;
-        console.error("[AuthContext] useEffect (getSession): Promise rejection:", error);
-        processUserSession(null, 'getSessionPromiseCatch');
+        // console.log('[AuthContext] getSession result, user:', session?.user?.id);
+        processUserSession(session?.user ?? null, 'initialGetSession');
     });
 
-    // 2. Subscribe to auth state changes
-    console.log('[AuthContext] useEffect: Setting up onAuthStateChange listener.');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!isMounted) {
-          console.log('[AuthContext] onAuthStateChange: Component unmounted. Aborting.');
-          return;
+      async (_event, session) => {
+        if (!isMounted) return;
+        // console.log('[AuthContext] onAuthStateChange: Event -', _event, 'Session user ID -', session?.user?.id || 'null');
+        processUserSession(session?.user ?? null, `onAuthStateChange-${_event}`);
+        if (_event === 'SIGNED_OUT') {
+            setFavoriteServiceIds([]); // Clear favorites on sign out
         }
-        console.log('[AuthContext] onAuthStateChange: Event -', event, 'Session user ID -', session?.user?.id || 'null');
-        // When onAuthStateChange fires, it's a definitive update on the auth state.
-        // We can directly use session.user from here if available.
-        processUserSession(session?.user || null, `onAuthStateChange-${event}`);
       }
     );
 
     return () => {
-      console.log('[AuthContext] useEffect - CLEANUP. Unsubscribing and setting isMounted to false.');
       isMounted = false;
       if (subscription) {
         subscription.unsubscribe();
       }
     };
-  }, []); // Empty dependency array means this runs once on mount and cleans up on unmount.
+  }, []); // Removed fetchFavorites from here, it has its own useEffect
 
   const login = async (email: string, password: string) => {
-    setIsLoading(true); // Set loading true during login attempt
+    setIsLoadingAuth(true);
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (authError) {
-        console.error('[AuthContext] login: authError:', authError);
         toast.error(authError.message.includes('Invalid login credentials') ? 'Correo o contraseña incorrectos' : authError.message);
-        setIsLoading(false); // Reset loading on error
-        throw authError; // Re-throw to be caught by UI
+        throw authError;
       }
-      // onAuthStateChange will handle setting user and isAuthenticated.
-      // setIsLoading(false) will be handled by processUserSession via onAuthStateChange.
       if (authData.user) {
           toast.success(`¡Bienvenido de nuevo!`);
       }
     } catch (error) {
-      if (!String(error).includes('AuthApiError')) { // Avoid double toast for auth errors
+      if (!String(error).includes('AuthApiError')) {
         toast.error('Error al iniciar sesión.');
       }
-      setIsLoading(false); // Ensure loading is reset if something else goes wrong
       throw error;
+    } finally {
+        setIsLoadingAuth(false); // Ensure loading is reset
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
-    setIsLoading(true); // Set loading true during registration attempt
+    setIsLoadingAuth(true);
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
       });
       if (authError) {
-        console.error('[AuthContext] register: authError:', authError);
         toast.error(authError.message.includes('already registered') ? 'Este correo ya está registrado' : authError.message);
-        setIsLoading(false);
         throw authError;
       }
 
@@ -209,13 +201,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .from('users')
           .insert([{ id: authData.user.id, email: authData.user.email, name: name }]);
         if (profileError) {
-          console.error('[AuthContext] register: profileError:', profileError);
           toast.error('Error al crear el perfil de usuario.');
-          // Consider how to handle this: sign out the user?
-          setIsLoading(false);
           throw profileError;
         }
-        // onAuthStateChange will handle setting user and isAuthenticated.
         toast.success(`¡Bienvenido ${name}! Tu cuenta ha sido creada. Revisa tu correo para confirmar.`);
       } else {
         toast.error('No se pudo completar el registro.');
@@ -224,31 +212,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!String(error).includes('AuthApiError') && !String(error).includes('PostgrestError')) {
          toast.error('Error durante el registro.');
       }
-      setIsLoading(false);
       throw error;
+    } finally {
+        setIsLoadingAuth(false);
     }
   };
 
   const logout = async () => {
-    setIsLoading(true);
+    setIsLoadingAuth(true);
     const { error } = await supabase.auth.signOut();
     if (error) {
-      console.error('[AuthContext] logout: error:', error);
       toast.error('Error al cerrar sesión.');
-      setIsLoading(false); // Reset loading on error
+      setIsLoadingAuth(false);
       throw error;
     }
-    // User state will be cleared by onAuthStateChange, which will also call setIsLoading(false)
-    // via processUserSession.
+    // User state, isAuthenticated, and favorites will be cleared by onAuthStateChange
     toast.success('Has cerrado sesión.');
+    // No need to manually setIsLoadingAuth(false) here, onAuthStateChange handles it.
   };
 
-  if (isLoading && !initialLoadDone.current) { // Show loading only if initial load is not yet marked as done
-    console.log('[AuthContext] Rendering "Loading app..." screen.');
-    return <div className="flex justify-center items-center min-h-screen">Loading app...</div>;
+  const addFavorite = async (serviceId: string) => {
+    if (!user || !isAuthenticated) {
+      toast.warn('Debes iniciar sesión para añadir favoritos.');
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('favorites')
+        .insert([{ user_id: user.id, service_id: serviceId }])
+        .select();
+
+      if (error) {
+        if (error.code === '23505') { // Unique constraint violation
+          // Already a favorite, this shouldn't happen if UI is correct
+          // console.warn('Service already favorited, or race condition.');
+        } else {
+          throw error;
+        }
+      }
+      if (data) {
+        setFavoriteServiceIds(prev => [...new Set([...prev, serviceId])]); // Ensure unique
+        // toast.success('Servicio añadido a favoritos!'); // Optional: too noisy?
+      }
+    } catch (err: any) {
+      toast.error('Error al añadir a favoritos: ' + err.message);
+    }
+  };
+
+  const removeFavorite = async (serviceId: string) => {
+    if (!user || !isAuthenticated) {
+      // toast.warn('Debes iniciar sesión para quitar favoritos.'); // Usually not needed as button won't be active
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from('favorites')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('service_id', serviceId);
+
+      if (error) throw error;
+      setFavoriteServiceIds(prev => prev.filter(id => id !== serviceId));
+      // toast.info('Servicio eliminado de favoritos.'); // Optional: too noisy?
+    } catch (err: any) {
+      toast.error('Error al quitar de favoritos: ' + err.message);
+    }
+  };
+
+  const isFavorite = (serviceId: string): boolean => {
+    return favoriteServiceIds.includes(serviceId);
+  };
+
+
+  if (isLoadingAuth && !initialLoadDone.current) {
+    return <div className="flex justify-center items-center min-h-screen text-lg">Cargando aplicación...</div>;
   }
 
-  console.log(`[AuthContext] Rendering children. isLoading: ${isLoading}, isAuthenticated: ${isAuthenticated}`);
   return (
     <AuthContext.Provider
       value={{
@@ -257,7 +296,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         isAuthenticated,
+        isLoadingAuth,
         setUser,
+        favoriteServiceIds,
+        addFavorite,
+        removeFavorite,
+        isFavorite,
+        fetchFavorites
       }}
     >
       {children}
