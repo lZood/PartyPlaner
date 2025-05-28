@@ -111,9 +111,10 @@ const fetchSearchResults = async () => {
       setSearchSummary(summaryParts.join(' '));
 
       try {
+        // En src/pages/SearchResultsPage.tsx
         const { data: rpcData, error: rpcError } = await supabase.rpc('search_services_rpc', {
           p_category_id: categoryParam || null,
-          p_subcategory_id: subcategoryParam || null, // Asegúrate que tu RPC maneje este parámetro
+          // p_subcategory_id: subcategoryParam || null, // Línea eliminada/comentada
           p_search_date: dateParam || null,
           p_location_text: locationTextParam || null,
           p_user_latitude: latParam ? parseFloat(latParam) : null,
