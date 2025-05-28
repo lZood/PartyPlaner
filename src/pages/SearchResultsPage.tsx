@@ -5,7 +5,7 @@ import { AppServiceType } from '../types';
 import ServiceCard from '../components/search/ServiceCard';
 import SearchBar from '../components/search/SearchBar';
 import { categories } from '../data/categories';
-import { Loader2, SearchSlash, Filter, Star as StarIcon, X } from 'lucide-react';
+import { Loader2, SearchSlash, Filter, Star as StarIcon, X, RotateCcw } from 'lucide-react'; // Added RotateCcw for clear filters
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL!,
@@ -18,6 +18,12 @@ interface ActiveFilters {
   features: string[];
 }
 
+const initialActiveFilters: ActiveFilters = {
+  priceRanges: [],
+  minRating: 0,
+  features: [],
+};
+
 const priceOptions = [
   { id: 'lt5000', label: 'Menos de $5,000', min: 0, max: 4999.99 },
   { id: '5000-10000', label: '$5,000 - $10,000', min: 5000, max: 10000 },
@@ -26,25 +32,20 @@ const priceOptions = [
   { id: 'quotable', label: 'Solicitar cotización', quotable: true },
 ];
 
-// Example features, you might want to get these dynamically or define them based on your data
 const availableFeatures = ['Entrega incluida', 'Personalizable', 'Equipo de sonido', 'Iluminación básica'];
 
 
 const SearchResultsPage: React.FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams(); // setSearchParams can be used to update URL with filters
-  const [originalServices, setOriginalServices] = useState<AppServiceType[]>([]); // Store results from RPC
-  const [filteredServices, setFilteredServices] = useState<AppServiceType[]>([]); // Services after client-side filtering
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [originalServices, setOriginalServices] = useState<AppServiceType[]>([]);
+  const [filteredServices, setFilteredServices] = useState<AppServiceType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pageTitle, setPageTitle] = useState('Resultados de Búsqueda');
   const [searchSummary, setSearchSummary] = useState('');
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
-  const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
-    priceRanges: [],
-    minRating: 0,
-    features: [],
-  });
+  const [activeFilters, setActiveFilters] = useState<ActiveFilters>(initialActiveFilters);
 
   useEffect(() => {
     const fetchSearchResults = async () => {
@@ -53,6 +54,8 @@ const SearchResultsPage: React.FC = () => {
       setOriginalServices([]);
       setFilteredServices([]);
       setSearchSummary('');
+      // Reset filters on new search, or load from URL if you implement that
+      // setActiveFilters(initialActiveFilters); 
 
       const locationTextParam = searchParams.get('location_text');
       const latParam = searchParams.get('lat');
@@ -146,7 +149,7 @@ const SearchResultsPage: React.FC = () => {
           } as AppServiceType;
         }) || [];
 
-        setOriginalServices(processedServices); // Store initial results
+        setOriginalServices(processedServices);
 
       } catch (e: any) {
         console.error("Error fetching search results:", e);
@@ -159,29 +162,25 @@ const SearchResultsPage: React.FC = () => {
     fetchSearchResults();
   }, [searchParams]);
 
-  // Apply client-side filters
   useEffect(() => {
     let servicesToFilter = [...originalServices];
 
-    // Price filter
     if (activeFilters.priceRanges.length > 0) {
       servicesToFilter = servicesToFilter.filter(service => {
         return activeFilters.priceRanges.some(rangeId => {
           const option = priceOptions.find(p => p.id === rangeId);
           if (!option) return false;
           if (option.quotable) return service.price === null;
-          if (service.price === null) return false; // Don't include quotable if specific range selected
+          if (service.price === null) return false;
           return service.price >= (option.min || 0) && service.price <= (option.max || Infinity);
         });
       });
     }
 
-    // Rating filter
     if (activeFilters.minRating > 0) {
       servicesToFilter = servicesToFilter.filter(service => service.rating >= activeFilters.minRating);
     }
 
-    // Feature filter
     if (activeFilters.features.length > 0) {
       servicesToFilter = servicesToFilter.filter(service =>
         activeFilters.features.every(feature => service.features.includes(feature))
@@ -216,87 +215,110 @@ const SearchResultsPage: React.FC = () => {
     });
   };
 
+  const clearAllFilters = () => {
+    setActiveFilters(initialActiveFilters);
+  };
+
   const FilterPanel: React.FC<{isMobile?: boolean}> = ({ isMobile = false }) => (
-    <div className={`bg-white rounded-lg shadow-md p-6 ${isMobile ? 'h-full overflow-y-auto' : 'sticky top-28'}`}>
+    <div className={`bg-white rounded-lg shadow-md p-6 ${isMobile ? 'h-full overflow-y-auto flex flex-col' : 'sticky top-28'}`}>
       <div className="flex justify-between items-center mb-6">
-        <h3 className="font-semibold text-lg">Filtros</h3>
-        {isMobile && (
+        <h3 className="font-semibold text-lg text-gray-800">Filtros</h3>
+        {isMobile ? (
            <button onClick={() => setShowMobileFilters(false)} className="text-gray-500 hover:text-gray-700">
             <X size={24} />
+          </button>
+        ) : (
+          <button
+            onClick={clearAllFilters}
+            className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center"
+            title="Limpiar todos los filtros"
+          >
+            <RotateCcw size={14} className="mr-1" />
+            Limpiar
           </button>
         )}
       </div>
       
-      {/* Price Filter */}
-      <div className="mb-6">
-        <h4 className="font-medium text-gray-800 mb-3">Precio</h4>
-        <div className="space-y-2">
-          {priceOptions.map(option => (
-            <label key={option.id} className="flex items-center text-sm text-gray-700">
-              <input
-                type="checkbox"
-                className="mr-2 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                checked={activeFilters.priceRanges.includes(option.id)}
-                onChange={() => handleFilterChange('priceRanges', option.id)}
-              />
-              <span>{option.label}</span>
-            </label>
-          ))}
+      <div className={isMobile ? 'flex-grow overflow-y-auto pr-2 -mr-2 space-y-6' : 'space-y-6'}>
+        {/* Price Filter */}
+        <div className="mb-6">
+          <h4 className="font-medium text-gray-800 mb-3">Precio</h4>
+          <div className="space-y-2">
+            {priceOptions.map(option => (
+              <label key={option.id} className="flex items-center text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mr-2 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  checked={activeFilters.priceRanges.includes(option.id)}
+                  onChange={() => handleFilterChange('priceRanges', option.id)}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        
+        {/* Rating Filter */}
+        <div className="mb-6">
+          <h4 className="font-medium text-gray-800 mb-3">Calificación</h4>
+          <div className="space-y-2">
+            {[4, 3, 2, 1].map((rating) => (
+              <label key={rating} className="flex items-center text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="radio"
+                  name="ratingFilter"
+                  className="mr-2 h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                  checked={activeFilters.minRating === rating}
+                  onChange={() => handleFilterChange('minRating', rating)}
+                />
+                <div className="flex text-yellow-400">
+                  {[...Array(5)].map((_, i) => (
+                    <StarIcon 
+                      key={i} 
+                      size={16} 
+                      fill={i < rating ? "currentColor" : "none"}
+                      strokeWidth={i < rating ? 0 : 1.5}
+                      className={i< rating ? "text-yellow-400" : "text-gray-300"}
+                    />
+                  ))}
+                </div>
+                <span className="ml-2">y más</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        
+        {/* Features Filter */}
+        <div>
+          <h4 className="font-medium text-gray-800 mb-3">Características</h4>
+          <div className="space-y-2">
+            {availableFeatures.map(feature => (
+              <label key={feature} className="flex items-center text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mr-2 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  checked={activeFilters.features.includes(feature)}
+                  onChange={() => handleFilterChange('features', feature)}
+                />
+                <span>{feature}</span>
+              </label>
+            ))}
+          </div>
         </div>
       </div>
-      
-      {/* Rating Filter */}
-      <div className="mb-6">
-        <h4 className="font-medium text-gray-800 mb-3">Calificación</h4>
-        <div className="space-y-2">
-          {[4, 3, 2, 1].map((rating) => (
-            <label key={rating} className="flex items-center text-sm text-gray-700 cursor-pointer">
-              <input
-                type="radio" // Using radio for single selection, or checkbox if multiple "X y más" could apply
-                name="ratingFilter"
-                className="mr-2 h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
-                checked={activeFilters.minRating === rating}
-                onChange={() => handleFilterChange('minRating', rating)}
-              />
-              <div className="flex text-yellow-400">
-                {[...Array(5)].map((_, i) => (
-                  <StarIcon 
-                    key={i} 
-                    size={16} 
-                    fill={i < rating ? "currentColor" : "none"}
-                    strokeWidth={i < rating ? 0 : 1.5}
-                    className={i< rating ? "text-yellow-400" : "text-gray-300"}
-                  />
-                ))}
-              </div>
-              <span className="ml-2">y más</span>
-            </label>
-          ))}
-        </div>
-      </div>
-      
-      {/* Features Filter */}
-      <div>
-        <h4 className="font-medium text-gray-800 mb-3">Características</h4>
-        <div className="space-y-2">
-          {availableFeatures.map(feature => (
-            <label key={feature} className="flex items-center text-sm text-gray-700">
-              <input
-                type="checkbox"
-                className="mr-2 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                checked={activeFilters.features.includes(feature)}
-                onChange={() => handleFilterChange('features', feature)}
-              />
-              <span>{feature}</span>
-            </label>
-          ))}
-        </div>
-      </div>
+
       {isMobile && (
-        <div className="mt-8 pt-4 border-t">
+        <div className="mt-auto pt-6 border-t border-gray-200 space-y-3">
+            <button 
+                onClick={clearAllFilters}
+                className="w-full py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 flex items-center justify-center"
+            >
+                <RotateCcw size={16} className="mr-2" />
+                Limpiar Filtros
+            </button>
             <button 
                 onClick={() => setShowMobileFilters(false)}
-                className="w-full py-2.5 bg-primary-500 text-white rounded-lg font-medium"
+                className="w-full py-2.5 bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-600"
             >
                 Aplicar Filtros
             </button>
@@ -314,7 +336,7 @@ const SearchResultsPage: React.FC = () => {
       
       <div className="container-custom py-8">
         <div className="flex justify-between items-center mb-6">
-            {isLoading ? (
+            {isLoading && originalServices.length === 0 ? ( // Show "Buscando servicios..." only on initial load
                 <h1 className="text-2xl font-bold text-gray-700">Buscando servicios...</h1>
             ) : error ? (
                 <h1 className="text-2xl font-bold text-red-600">Error en la búsqueda</h1>
@@ -336,23 +358,20 @@ const SearchResultsPage: React.FC = () => {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Desktop Filters */}
           <div className="hidden lg:block w-64 xl:w-72 flex-shrink-0">
             <FilterPanel />
           </div>
 
-          {/* Mobile Filters Modal */}
           {showMobileFilters && (
             <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-50 flex justify-end">
-              <div className="w-4/5 max-w-sm bg-white h-full">
+              <div className="w-4/5 max-w-sm bg-white h-full shadow-xl">
                 <FilterPanel isMobile={true} />
               </div>
             </div>
           )}
 
-          {/* Service Listings */}
           <div className="flex-1">
-            {isLoading ? (
+            {isLoading && originalServices.length === 0 ? ( // Show loader only on initial load
               <div className="flex flex-col justify-center items-center py-20 text-center">
                 <Loader2 className="h-12 w-12 animate-spin text-primary-500" />
                 <p className="mt-4 text-lg text-gray-600">Cargando resultados...</p>
@@ -366,16 +385,20 @@ const SearchResultsPage: React.FC = () => {
             ) : filteredServices.length === 0 ? (
               <div className="bg-white rounded-lg shadow-md p-8 md:p-12 text-center">
                 <SearchSlash className="mx-auto h-16 w-16 text-gray-400 mb-6" />
-                <h2 className="text-2xl font-semibold text-gray-800 mb-3">No se encontraron resultados con los filtros aplicados</h2>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-3">
+                  {originalServices.length > 0 ? 'No hay servicios que coincidan con tus filtros' : 'No se encontraron resultados'}
+                </h2>
                 <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                  Intenta ajustar los filtros o ampliar tu búsqueda original.
+                  {originalServices.length > 0 ? 'Intenta ajustar o limpiar los filtros.' : `No pudimos encontrar servicios que coincidan con "${pageTitle}". Intenta ampliar tu búsqueda.`}
                 </p>
-                <button
-                    onClick={() => setActiveFilters({ priceRanges: [], minRating: 0, features: [] })}
-                    className="btn bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 px-6 rounded-lg font-medium mr-4"
+                {originalServices.length > 0 && (
+                   <button
+                    onClick={clearAllFilters}
+                    className="btn bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 px-6 rounded-lg font-medium mr-0 mb-3 sm:mr-4 sm:mb-0"
                 >
                     Limpiar Filtros
                 </button>
+                )}
                 <Link
                     to="/"
                     className="btn bg-primary-500 hover:bg-primary-600 text-white py-2.5 px-6 rounded-lg font-medium"
