@@ -1,22 +1,22 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom'; // Added useNavigate
 import Slider from 'react-slick';
 import {
   Star,
-  Heart as HeartIcon,
+  Heart as HeartIcon, // Renamed to avoid conflict
   CheckCircle,
   Truck,
   CalendarDays as Calendar,
   Clock,
   MinusCircle,
   PlusCircle,
-  Loader2,
+  Loader2, // Keep as Loader2, will rename if specific instance needed
   MapPin,
   Briefcase,
   Users,
   ShoppingBag,
-  ChevronLeft,
-  ChevronRight
+  ChevronLeft, // Added for calendar
+  ChevronRight // Added for calendar
 } from 'lucide-react';
 import { categories as mockCategories } from '../data/categories';
 import { services as mockServicesData } from '../data/services';
@@ -24,11 +24,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import AuthModal from '../components/auth/AuthModal';
 import { AppServiceType, Category as AppCategoryType, Subcategory as AppSubcategoryType, ServiceCoverageArea, ServiceAvailability } from '../types';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js'; // Added SupabaseClient
 import { useReservation } from '../contexts/ReservationContext';
 import { toast } from 'react-toastify';
 
-const supabase: SupabaseClient = createClient(
+const supabase: SupabaseClient = createClient( // Added SupabaseClient type
   import.meta.env.VITE_SUPABASE_URL!,
   import.meta.env.VITE_SUPABASE_ANON_KEY!
 );
@@ -60,6 +60,8 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availabilit
     for (let day = 1; day <= daysInSelectedMonth; day++) {
       const currentDate = new Date(displayYear, displayMonth, day);
       currentDate.setHours(0, 0, 0, 0);
+      // const dateString = currentDate.toISOString().split('T')[0]; // Original
+      // FIX: Construct dateString from local parts to match selectedEventDateForService format
       const year = currentDate.getFullYear();
       const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
       const dayNum = currentDate.getDate().toString().padStart(2, '0');
@@ -198,7 +200,7 @@ const ServiceDetailPage: React.FC = () => {
       try {
         const { data: serviceData, error: serviceError } = await supabase
           .from('services')
-          .select('*, service_coverage_areas(*), image_url') // Asegúrate de seleccionar image_url si es el campo correcto para la principal
+          .select('*, service_coverage_areas(*)') 
           .eq('id', serviceId)
           .maybeSingle();
 
@@ -214,45 +216,19 @@ const ServiceDetailPage: React.FC = () => {
           .order('position', { ascending: true });
 
         let mainImageUrl = 'https://placehold.co/600x400?text=No+Imagen';
-        const otherGalleryImageUrls: string[] = [];
-        
+        const galleryImageUrls: string[] = [];
         if (galleryData && galleryData.length > 0) {
-          const mainImageRecord = galleryData.find(img => img.is_main_image);
+          let mainImageRecord = galleryData.find(img => img.is_main_image) || galleryData[0];
           if (mainImageRecord?.storage_path) {
             const { data: mainUrlData } = supabase.storage.from('service-images').getPublicUrl(mainImageRecord.storage_path);
             if (mainUrlData?.publicUrl) mainImageUrl = mainUrlData.publicUrl;
-          } else if (galleryData[0]?.storage_path) { 
-            const { data: firstUrlData } = supabase.storage.from('service-images').getPublicUrl(galleryData[0].storage_path);
-            if (firstUrlData?.publicUrl) mainImageUrl = firstUrlData.publicUrl;
           }
-        } else if (serviceData.image_url) { 
-            const { data: mainServiceUrlData } = supabase.storage.from('service-images').getPublicUrl(serviceData.image_url);
-            if (mainServiceUrlData?.publicUrl) {
-                mainImageUrl = mainServiceUrlData.publicUrl;
-            } else { // If serviceData.image_url is not a path but a full URL already
-                if (serviceData.image_url.startsWith('http')) mainImageUrl = serviceData.image_url;
+          galleryData.forEach(img => {
+            if (img.storage_path) {
+              const { data: urlData } = supabase.storage.from('service-images').getPublicUrl(img.storage_path);
+              if (urlData?.publicUrl) galleryImageUrls.push(urlData.publicUrl);
             }
-        }
-
-        if (galleryData && galleryData.length > 0) {
-            galleryData.forEach(img => {
-                if (img.storage_path) {
-                    const { data: urlData } = supabase.storage.from('service-images').getPublicUrl(img.storage_path);
-                    if (urlData?.publicUrl && urlData.publicUrl !== mainImageUrl) {
-                        otherGalleryImageUrls.push(urlData.publicUrl);
-                    }
-                }
-            });
-        }
-        
-        const finalGalleryUrls = [];
-        if (mainImageUrl && mainImageUrl !== 'https://placehold.co/600x400?text=No+Imagen') {
-            finalGalleryUrls.push(mainImageUrl);
-        }
-        finalGalleryUrls.push(...otherGalleryImageUrls);
-        
-        if (finalGalleryUrls.length === 0) {
-            finalGalleryUrls.push('https://placehold.co/800x600?text=Sin+Imagen+Disponible');
+          });
         }
         
         const today = new Date();
@@ -282,8 +258,7 @@ const ServiceDetailPage: React.FC = () => {
         const populatedService: AppServiceType = {
           id: serviceData.id, name: serviceData.name, description: serviceData.description,
           shortDescription: serviceData.short_description, price: serviceData.price,
-          imageUrl: mainImageUrl, 
-          gallery: finalGalleryUrls, 
+          imageUrl: mainImageUrl, gallery: galleryImageUrls.length > 0 ? galleryImageUrls : (mainImageUrl.startsWith('http') ? [mainImageUrl] : []),
           categoryId: serviceData.category_id, subcategoryId: serviceData.subcategory_id,
           rating: serviceData.rating, reviewCount: serviceData.review_count,
           features: serviceData.features || [], 
@@ -319,7 +294,7 @@ const ServiceDetailPage: React.FC = () => {
       finally { setIsLoading(false); }
     };
     fetchServiceDetails();
-  }, [serviceId, globalSelectedDate]);
+  }, [serviceId, globalSelectedDate, supabase]); 
 
   useEffect(() => {
     if (service) { document.title = `${service.name} | CABETG Party Planner`; window.scrollTo(0, 0); }
@@ -338,10 +313,13 @@ const ServiceDetailPage: React.FC = () => {
   const similarServices = service ? mockServicesData.filter((s: AppServiceType) => s.id !== serviceId && s.categoryId === service?.categoryId && s.subcategoryId === service?.subcategoryId).slice(0, 3) : [];
   
   const handleDateSelectionInDetail = (date: Date) => {
+    // date es un objeto Date local, ej: 2025-05-29T00:00:00 (Hora Local)
+    
+    // Construye la cadena YYYY-MM-DD a partir de las partes de la fecha local
     const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0'); // getMonth() es 0-indexado
     const day = date.getDate().toString().padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
+    const dateStr = `${year}-${month}-${day}`; // Ahora dateStr será "2025-05-29"
   
     setSelectedEventDateForService(dateStr);
     toast.info(`Fecha seleccionada: ${date.toLocaleDateString('es-MX', {day: 'numeric', month: 'short'})}`, {position: "bottom-right", autoClose: 2000});
@@ -363,7 +341,7 @@ const ServiceDetailPage: React.FC = () => {
               .eq('date', selectedEventDateForService)
               .single();
 
-          if (checkError && checkError.code !== 'PGRST116') { 
+          if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means no rows found, which is handled below
               throw checkError;
           }
           
@@ -406,7 +384,7 @@ const ServiceDetailPage: React.FC = () => {
     );
   }
   if (!service) { 
-    return (
+     return (
       <div className="container-custom py-16 text-center">
         <h2 className="text-2xl font-bold mb-4">Servicio no encontrado</h2>
         <p className="mb-8 text-gray-600">Lo sentimos, el servicio que buscas no existe o no pudo ser cargado.</p>
@@ -444,61 +422,18 @@ const ServiceDetailPage: React.FC = () => {
             </ol>
         </nav>
 
-        {/* --- INICIO DE LA ESTRUCTURA DE GRID PRINCIPAL --- */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-          
-          {/* --- COLUMNA IZQUIERDA: GALERÍA Y DESCRIPCIÓN --- */}
-          <div className="lg:col-span-2 space-y-6"> {/* space-y-6 para separar galería de descripción */}
-            {/* Bloque de la Galería */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="lg:col-span-2">
+             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               {service.gallery && service.gallery.length > 0 ? (
                 <Slider {...sliderSettings}>
-                  {service.gallery.map((image, index) => (
-                    <div key={index} className="h-72 sm:h-96"> {/* Puedes ajustar esta altura si es necesario */}
-                      <img
-                        src={image}
-                        alt={`${service.name} - Imagen ${index + 1}`}
-                        className="w-full h-full object-cover"
-                        onError={(e) => ((e.target as HTMLImageElement).src = 'https://placehold.co/800x600?text=Error+Imagen')}
-                      />
-                    </div>
-                  ))}
+                  {service.gallery.map((image, index) => ( <div key={index} className="h-72 sm:h-96"><img src={image} alt={`${service.name} - Imagen ${index + 1}`} className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).src = 'https://placehold.co/800x600?text=Error+Imagen')}/></div> ))}
                 </Slider>
-              ) : (
-                <div className="h-72 sm:h-96 flex items-center justify-center bg-gray-100">
-                  <img
-                    src={'https://placehold.co/800x600?text=Sin+Imagen+Disponible'}
-                    alt={service.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
+              ) : ( <div className="h-72 sm:h-96 flex items-center justify-center bg-gray-100"><img src={service.imageUrl} alt={service.name} className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).src = 'https://placehold.co/800x600?text=Sin+Imagen')}/></div> )}
             </div>
+          </div>
 
-            {/* Bloque de Descripción y Características (Movido aquí) */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-xl font-bold mb-4 border-b pb-3 text-gray-800">Descripción del Servicio</h2>
-                <p className="text-gray-700 whitespace-pre-line leading-relaxed text-sm">{service.description}</p>
-                
-                {service.features && service.features.length > 0 && (
-                    <div className="mt-6 pt-4 border-t">
-                        <h3 className="text-lg font-semibold mb-3 text-gray-700">Características Incluidas</h3>
-                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-                            {service.features.map((feature, index) => (
-                                <li key={index} className="flex items-center text-sm text-gray-600">
-                                    <CheckCircle size={16} className="text-green-500 mr-2 flex-shrink-0" />
-                                    {feature}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
-            </div>
-          </div> {/* --- FIN COLUMNA IZQUIERDA --- */}
-
-          {/* --- COLUMNA DERECHA: DETALLES DE COMPRA Y SERVICIOS SIMILARES --- */}
-          <div className="lg:col-span-1 space-y-6"> {/* space-y-6 para separar bloques en esta columna */}
-            {/* Bloque de Detalles de Compra */}
+          <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-lg p-5 sm:p-6">
                 <div className="flex justify-between items-start mb-3 sm:mb-4">
                     <h1 className="text-xl sm:text-2xl font-bold text-gray-800 flex-1 pr-2">{service.name}</h1>
@@ -537,7 +472,7 @@ const ServiceDetailPage: React.FC = () => {
                         </div>
                     </div>
                 )}
-                
+              
               <div className="mb-4 sm:mb-6 border-t border-gray-200 pt-4">
                 <h3 className="font-medium mb-2 text-sm text-gray-700">Ubicación y Cobertura</h3>
                 {service.provider_name && <p className="text-xs text-gray-600 flex items-center mb-1"><Briefcase size={13} className="mr-1.5 text-gray-400"/> Proveedor: {service.provider_name}</p>}
@@ -550,7 +485,7 @@ const ServiceDetailPage: React.FC = () => {
                     {service.delivery_radius_km && <p className="text-xs text-gray-600 flex items-center"><Truck size={13} className="mr-1.5 text-gray-400"/> Radio de entrega: {service.delivery_radius_km} km</p>}
                   </>
                 )}
-                  {service.service_type === 'multiple_areas' && service.coverage_areas && service.coverage_areas.length > 0 && (
+                 {service.service_type === 'multiple_areas' && service.coverage_areas && service.coverage_areas.length > 0 && (
                     <div>
                         <p className="text-xs text-gray-600 flex items-center mb-1"><Users size={13} className="mr-1.5 text-gray-400"/> Cubre las siguientes zonas:</p>
                         <ul className="list-disc list-inside pl-4 space-y-0.5">
@@ -581,9 +516,9 @@ const ServiceDetailPage: React.FC = () => {
                 </p>
               </div>
 
-                {totalPrice !== null && (<div className="flex justify-between items-center py-3 mb-4 border-t border-b border-gray-200 mt-6"><div className="text-md font-medium">Total Estimado</div><div className="text-lg font-bold">${totalPrice.toLocaleString('es-MX')}</div></div>)}
-                
-                {itemInCart ? (
+               {totalPrice !== null && (<div className="flex justify-between items-center py-3 mb-4 border-t border-b border-gray-200 mt-6"><div className="text-md font-medium">Total Estimado</div><div className="text-lg font-bold">${totalPrice.toLocaleString('es-MX')}</div></div>)}
+               
+               {itemInCart ? (
                   <Link 
                     to="/cart" 
                     className="btn w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-lg font-medium flex items-center justify-center text-sm shadow-sm"
@@ -606,30 +541,51 @@ const ServiceDetailPage: React.FC = () => {
                       })()})`}
                   </button>
                 )}
-            </div> {/* Fin Bloque de Detalles de Compra */}
+            </div>
+          </div>
+        </div>
 
-            {/* Bloque de Servicios Similares (Movido aquí, dentro de la columna derecha) */}
-            {similarServices.length > 0 && (
-                <div className="bg-white rounded-xl shadow-lg p-6"> {/* mt-6 o space-y-6 en el padre ya maneja el espacio */}
-                    <h2 className="text-xl font-bold mb-4 text-gray-800">Servicios Similares</h2>
-                    <div className="space-y-4">
-                        {similarServices.map(simService => (
-                            <Link key={simService.id} to={`/service/${simService.id}`} className="group block p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                                <div className="flex items-start space-x-3">
-                                    <img src={simService.imageUrl} alt={simService.name} className="w-16 h-16 object-cover rounded-md flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/64x64?text=N/A'; }}/>
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-gray-700 group-hover:text-primary-600 line-clamp-2">{simService.name}</h4>
-                                        <p className="text-xs text-gray-500 line-clamp-1">{simService.shortDescription}</p>
-                                        <div className="text-sm font-medium text-primary-500 mt-0.5">{simService.price ? `$${simService.price.toLocaleString('es-MX')}` : 'Cotizar'}</div>
-                                    </div>
-                                </div>
-                            </Link>
-                        ))}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 mt-8">
+            <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-6">
+                <h2 className="text-xl font-bold mb-4 border-b pb-3 text-gray-800">Descripción del Servicio</h2>
+                <p className="text-gray-700 whitespace-pre-line leading-relaxed text-sm">{service.description}</p>
+                
+                {service.features && service.features.length > 0 && (
+                    <div className="mt-6 pt-4 border-t">
+                        <h3 className="text-lg font-semibold mb-3 text-gray-700">Características Incluidas</h3>
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                            {service.features.map((feature, index) => (
+                                <li key={index} className="flex items-center text-sm text-gray-600">
+                                    <CheckCircle size={16} className="text-green-500 mr-2 flex-shrink-0" />
+                                    {feature}
+                                </li>
+                            ))}
+                        </ul>
                     </div>
-                </div>
-            )}
-          </div> {/* --- FIN COLUMNA DERECHA --- */}
-        </div> {/* --- FIN DE LA ESTRUCTURA DE GRID PRINCIPAL --- */}
+                )}
+            </div>
+            <div className="lg:col-span-1">
+                {similarServices.length > 0 && (
+                    <div className="bg-white rounded-xl shadow-lg p-6">
+                        <h2 className="text-xl font-bold mb-4 text-gray-800">Servicios Similares</h2>
+                        <div className="space-y-4">
+                            {similarServices.map(simService => (
+                                <Link key={simService.id} to={`/service/${simService.id}`} className="group block p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                                    <div className="flex items-start space-x-3">
+                                        <img src={simService.imageUrl} alt={simService.name} className="w-16 h-16 object-cover rounded-md flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/64x64?text=N/A'; }}/>
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-gray-700 group-hover:text-primary-600 line-clamp-2">{simService.name}</h4>
+                                            <p className="text-xs text-gray-500 line-clamp-1">{simService.shortDescription}</p>
+                                            <div className="text-sm font-medium text-primary-500 mt-0.5">{simService.price ? `$${simService.price.toLocaleString('es-MX')}` : 'Cotizar'}</div>
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
       </div>
     </div>
   );
