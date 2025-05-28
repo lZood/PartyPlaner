@@ -13,12 +13,15 @@ import { toast } from 'react-toastify';
 import { geocodeAddressNominatim, GeocodingResult } from '../utils/geocoding';
 
 interface ImageUpload {
-  file: File;
+  file: File; // El archivo real si es nuevo, o un placeholder si es existente
   preview: string;
   isMain?: boolean;
+  id?: string; // ID de la imagen en la tabla service_images (para edición)
+  storage_path?: string; // Path en Supabase Storage (para saber si hay que eliminar)
 }
 
 interface ServiceFormData {
+  id?: string;
   name: string;
   categoryId: string;
   subcategoryId: string;
@@ -31,9 +34,16 @@ interface ServiceFormData {
   base_latitude?: string;
   base_longitude?: string;
   delivery_radius_km?: string;
-  coverage_areas: Array<Partial<ServiceCoverageArea & { temp_id: string }>>;
+  coverage_areas: Array<Partial<ServiceCoverageArea & { temp_id: string | number; id?: string; to_delete?: boolean }>>; // temp_id para nuevas, id para existentes, to_delete para marcar
   default_total_capacity: string;
   default_is_available: boolean;
+}
+
+// (Opcional pero recomendado) Define un tipo para los servicios del proveedor que incluya sus imágenes y áreas
+interface ProviderService extends AppServiceType {
+  reservations?: Reservation[]; // Ya lo tenías para la pestaña de proveedor
+  service_images?: ServiceImage[]; // Añade esto para cargar imágenes al editar
+  service_coverage_areas?: ServiceCoverageArea[]; // Añade esto para cargar áreas al editar
 }
 
 const supabase = createClient(
@@ -48,7 +58,10 @@ const ProfilePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'profile' | 'myServices' | 'myPurchases'>('profile');
   
   const [showServiceForm, setShowServiceForm] = useState(false);
+  const [editingService, setEditingService] = useState<ProviderService | null>(null); // NUEVO: Para el servicio en edición
   const [mainImage, setMainImage] = useState<ImageUpload | null>(null);
+  const [imagesToDelete, setImagesToDelete] = useState<string[]>([]); // NUEVO: Para paths de storage a eliminar
+  const [isDeletingService, setIsDeletingService] = useState<string | null>(null); // NUEVO: ID del servicio que se está eliminando
   const [galleryImages, setGalleryImages] = useState<ImageUpload[]>([]);
   const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
   const [isSubmittingService, setIsSubmittingService] = useState(false);
@@ -80,8 +93,9 @@ const ProfilePage: React.FC = () => {
   };
 
   const [serviceFormData, setServiceFormData] = useState<ServiceFormData>(initialServiceFormData);
-  const [myServices, setMyServices] = useState<AppServiceType[]>([]); 
+  const [myServices, setMyServices] = useState<ProviderService[]>([]); // MODIFICADO: Usar ProviderService
   const [myPurchases, setMyPurchases] = useState<Reservation[]>([]);
+  const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null); // NUEVO: (Si no lo tenías para las reservaciones)
   const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
 
@@ -119,7 +133,7 @@ const ProfilePage: React.FC = () => {
           try {
             const { data: servicesData, error: servicesError } = await supabase
               .from('services')
-              .select('*, service_coverage_areas(*)')
+              .select('*, service_coverage_areas(*), service_images(*)') // MODIFICADO: Añadir service_images(*)
               .eq('provider_id', user.id)
               .order('created_at', { ascending: false });
 
@@ -142,7 +156,14 @@ const ProfilePage: React.FC = () => {
                       .getPublicUrl(mainImageData.storage_path);
                     if (urlData?.publicUrl) publicUrl = urlData.publicUrl;
                   }
-                  return { ...service, imageUrl: publicUrl, gallery: [], coverage_areas: service.service_coverage_areas || [] } as AppServiceType;
+                  return { 
+                      ...service, 
+                      imageUrl: publicUrl, 
+                      // gallery: se manejará al editar, no es necesario poblar aquí
+                      reservations: (reservationsData as Reservation[]) || [], // Asumiendo que cargas reservaciones aquí
+                      service_images: service.service_images || [], // AÑADIDO: Pasar las imágenes cargadas
+                      service_coverage_areas: service.service_coverage_areas || [] // AÑADIDO: Pasar las áreas
+                  } as ProviderService; // MODIFICADO: Usar ProviderService
                 })
               );
               setMyServices(servicesWithImages);
