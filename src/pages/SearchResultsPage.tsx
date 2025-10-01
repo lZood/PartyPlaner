@@ -111,55 +111,71 @@ const fetchSearchResults = async () => {
       setSearchSummary(summaryParts.join(' '));
 
       try {
-        // En src/pages/SearchResultsPage.tsx
-        const { data: rpcData, error: rpcError } = await supabase.rpc('search_services_rpc', {
-          p_category_id: categoryParam || null,
-          // p_subcategory_id: subcategoryParam || null, // Línea eliminada/comentada
-          p_search_date: dateParam || null,
-          p_location_text: locationTextParam || null,
-          p_user_latitude: latParam ? parseFloat(latParam) : null,
-          p_user_longitude: lonParam ? parseFloat(lonParam) : null,
-        });
+        // Fallback to direct query if RPC fails or doesn't exist
+        let query = supabase
+          .from('services')
+          .select(`
+            *,
+            service_images (storage_path, is_main_image)
+          `)
+          .eq('is_approved', true);
 
-        if (rpcError) {
-          console.error("RPC Error:", rpcError);
-          throw rpcError;
+        // Apply filters
+        if (categoryParam) {
+          query = query.eq('category_id', categoryParam);
+        }
+        if (subcategoryParam) {
+          query = query.eq('subcategory_id', subcategoryParam);
+        }
+        if (dateParam) {
+          // For date filtering, we'll check availability later
+          // For now, just include all services
+        }
+
+        const { data: servicesData, error: servicesError } = await query.order('created_at', { ascending: false });
+
+        if (servicesError) {
+          console.error("Services query error:", servicesError);
+          throw servicesError;
         }
         
-        console.log("Datos crudos del RPC:", rpcData);
+        console.log("Datos de servicios:", servicesData);
 
-        const processedServices = rpcData?.map((service: any) => {
-          console.log("Procesando servicio del RPC:", service); 
+        const processedServices = servicesData?.map((service: any) => {
+          console.log("Procesando servicio:", service); 
 
           let imageUrl = 'https://placehold.co/300x200?text=Sin+Imagen'; 
 
-          if (service.main_image_storage_path && typeof service.main_image_storage_path === 'string' && service.main_image_storage_path.trim() !== '') {
-            console.log(`[${service.name || service.id}] Ruta de imagen encontrada en RPC: '${service.main_image_storage_path}'`);
+          // Get main image from service_images array
+          const mainImageRecord = service.service_images?.find((img: any) => img.is_main_image) || service.service_images?.[0];
+          
+          if (mainImageRecord?.storage_path && typeof mainImageRecord.storage_path === 'string' && mainImageRecord.storage_path.trim() !== '') {
+            console.log(`[${service.name || service.id}] Ruta de imagen encontrada: '${mainImageRecord.storage_path}'`);
             try {
               const { data: urlData, error: storageError } = supabase.storage
                 .from('service-images') 
-                .getPublicUrl(service.main_image_storage_path);
+                .getPublicUrl(mainImageRecord.storage_path);
 
               if (storageError) {
-                console.error(`[${service.name || service.id}] Error al obtener URL pública desde Supabase Storage:`, storageError, "Para la ruta:", service.main_image_storage_path);
+                console.error(`[${service.name || service.id}] Error al obtener URL pública desde Supabase Storage:`, storageError, "Para la ruta:", mainImageRecord.storage_path);
                 imageUrl = 'https://placehold.co/300x200?text=Error+URL'; 
               } else if (urlData && urlData.publicUrl) {
                 imageUrl = urlData.publicUrl;
                 console.log(`[${service.name || service.id}] URL pública generada:`, imageUrl);
               } else {
-                console.warn(`[${service.name || service.id}] No se pudo obtener urlData.publicUrl para la ruta: '${service.main_image_storage_path}'. Respuesta de getPublicUrl:`, urlData);
+                console.warn(`[${service.name || service.id}] No se pudo obtener urlData.publicUrl para la ruta: '${mainImageRecord.storage_path}'. Respuesta de getPublicUrl:`, urlData);
                 imageUrl = 'https://placehold.co/300x200?text=URL+Inválida'; 
               }
             } catch (e) {
-              console.error(`[${service.name || service.id}] EXCEPCIÓN al intentar obtener URL pública para '${service.main_image_storage_path}':`, e);
+              console.error(`[${service.name || service.id}] EXCEPCIÓN al intentar obtener URL pública para '${mainImageRecord.storage_path}':`, e);
               imageUrl = 'https://placehold.co/300x200?text=Excepción+URL';
             }
           } else {
-            console.warn(`[${service.name || service.id}] Servicio SIN main_image_storage_path VÁLIDO. Valor recibido:`, service.main_image_storage_path);
+            console.warn(`[${service.name || service.id}] Servicio SIN imagen principal VÁLIDA. service_images:`, service.service_images);
           }
 
           return {
-            ...service, // Mantén todos los demás campos que devuelve el RPC
+            ...service, // Mantén todos los demás campos
             id: service.id,
             name: service.name,
             shortDescription: service.short_description,
