@@ -68,29 +68,40 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availabilit
       const dateString = `${year}-${month}-${dayNum}`;
       
       const dayAvailability = availability.find(a => a.date === dateString);
-      let cellClass = "p-1 border text-center text-xs sm:text-sm h-10 sm:h-12 flex items-center justify-center transition-all duration-150 ease-in-out ";
+      let cellClass = "p-1 border text-center text-xs sm:text-sm h-10 sm:h-12 flex items-center justify-center transition-all duration-150 ease-in-out cursor-pointer ";
       const isCurrentlySelected = selectedServiceDate === dateString;
       let isClickable = false;
+      let tooltipText = "";
 
       if (currentDate < today) {
         cellClass += "bg-gray-200 text-gray-400 cursor-not-allowed opacity-70";
+        tooltipText = "Fecha pasada";
       } else if (dayAvailability) {
+        // Hay registro específico de disponibilidad
         if (dayAvailability.isAvailable && dayAvailability.totalCapacity > dayAvailability.bookedCapacity) {
           isClickable = true;
           cellClass += isCurrentlySelected 
             ? "bg-primary-500 text-white font-semibold ring-2 ring-primary-300 shadow-lg transform scale-105" 
             : "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer hover:shadow-md";
+          tooltipText = `Disponible (${dayAvailability.totalCapacity - dayAvailability.bookedCapacity} espacios)`;
         } else {
           cellClass += "bg-red-100 text-red-700 line-through cursor-not-allowed opacity-70";
+          tooltipText = dayAvailability.isAvailable ? `Lleno (${dayAvailability.bookedCapacity}/${dayAvailability.totalCapacity})` : 'No disponible';
         }
       } else {
-        cellClass += "bg-gray-100 text-gray-500 cursor-not-allowed opacity-70";
+        // No hay registro específico - permitir selección para fechas futuras
+        isClickable = true;
+        cellClass += isCurrentlySelected 
+          ? "bg-primary-500 text-white font-semibold ring-2 ring-primary-300 shadow-lg transform scale-105" 
+          : "bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer hover:shadow-md";
+        tooltipText = "Disponible (consultar disponibilidad)";
       }
+      
       daysArray.push(
         <div
           key={day}
           className={cellClass}
-          title={isClickable ? `Seleccionar ${dateString}` : (dayAvailability ? (dayAvailability.isAvailable ? `Lleno (Reservado: ${dayAvailability.bookedCapacity}/${dayAvailability.totalCapacity})` : 'No disponible') : 'No disponible')}
+          title={tooltipText}
           onClick={() => {
             if (isClickable) {
               onDateSelect(currentDate);
@@ -139,7 +150,13 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({ availabilit
       <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
         {renderCalendarDays()}
       </div>
-      <p className="text-xs text-gray-500 mt-2">Selecciona una fecha disponible para añadir a tu lista.</p>
+      <div className="mt-3 text-xs text-gray-500 space-y-1">
+        <p>Selecciona una fecha para añadir a tu lista.</p>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="flex items-center"><span className="w-3 h-3 bg-green-100 border border-green-200 rounded mr-1"></span>Confirmado disponible</span>
+          <span className="flex items-center"><span className="w-3 h-3 bg-blue-50 border border-blue-200 rounded mr-1"></span>Consultar disponibilidad</span>
+        </div>
+      </div>
     </div>
   );
 };
@@ -334,6 +351,7 @@ const ServiceDetailPage: React.FC = () => {
       }
       setIsAddingToCart(true);
       try {
+          // Verificar si existe un registro de disponibilidad específico
           const { data: availabilityCheck, error: checkError } = await supabase
               .from('service_availability')
               .select('total_capacity, booked_capacity, is_available')
@@ -341,11 +359,12 @@ const ServiceDetailPage: React.FC = () => {
               .eq('date', selectedEventDateForService)
               .single();
 
-          if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means no rows found, which is handled below
+          if (checkError && checkError.code !== 'PGRST116') {
               throw checkError;
           }
           
-          if (!availabilityCheck || !availabilityCheck.is_available || (availabilityCheck.booked_capacity + quantity) > availabilityCheck.total_capacity) {
+          // Si hay registro específico de disponibilidad, verificar capacidad
+          if (availabilityCheck && (!availabilityCheck.is_available || (availabilityCheck.booked_capacity + quantity) > availabilityCheck.total_capacity)) {
               toast.error(`El servicio ya no está disponible o excede la capacidad para el ${(() => {
                 const [year, month, day] = selectedEventDateForService.split('-').map(Number);
                 return new Date(year, month - 1, day).toLocaleDateString('es-MX', {day:'numeric', month:'short'});
@@ -354,11 +373,12 @@ const ServiceDetailPage: React.FC = () => {
               return;
           }
           
+          // Si no hay registro específico, permitir la reserva (se puede crear el registro después)
           addToCart(service, quantity, selectedEventDateForService); 
           toast.success(`${service.name} añadido a tu lista para el ${(() => {
             const [year, month, day] = selectedEventDateForService.split('-').map(Number);
             return new Date(year, month - 1, day).toLocaleDateString('es-MX', {day:'numeric', month:'short'});
-          })()}!`, {position: "bottom-right"});
+          })()}!${!availabilityCheck ? ' (Disponibilidad sujeta a confirmación)' : ''}`, {position: "bottom-right"});
 
       } catch (error: any) {
           toast.error(`Error al verificar disponibilidad: ${error.message}. Intenta de nuevo.`, {position: "bottom-right"});
