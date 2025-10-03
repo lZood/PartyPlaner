@@ -250,14 +250,18 @@ const ServiceDetailPage: React.FC = () => {
         
         const today = new Date();
         const futureDate = new Date();
-        futureDate.setDate(today.getDate() + 90); 
-        
+        futureDate.setDate(today.getDate() + 90);
+
+        // Format dates as YYYY-MM-DD using local time
+        const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+        const futureDateStr = `${futureDate.getFullYear()}-${(futureDate.getMonth() + 1).toString().padStart(2, '0')}-${futureDate.getDate().toString().padStart(2, '0')}`;
+
         const { data: availabilityDataSupabase, error: availabilityError } = await supabase
             .from('service_availability')
             .select('id, service_id, date, total_capacity, booked_capacity, is_available')
             .eq('service_id', serviceId)
-            .gte('date', today.toISOString().split('T')[0])
-            .lte('date', futureDate.toISOString().split('T')[0])
+            .gte('date', todayStr)
+            .lte('date', futureDateStr)
             .order('date', { ascending: true });
 
         if (availabilityError) console.error('Error fetching availability:', availabilityError.message);
@@ -290,12 +294,18 @@ const ServiceDetailPage: React.FC = () => {
         };
         setService(populatedService);
 
-        if (globalSelectedDate && mappedAvailabilities.length > 0) { 
-            const globalDateStr = globalSelectedDate.toISOString().split('T')[0];
-            const isAvailableGlobal = mappedAvailabilities.find(
-                (a: ServiceAvailability) => a.date === globalDateStr && a.isAvailable && a.totalCapacity > a.bookedCapacity
-            );
-            if (isAvailableGlobal) {
+        if (globalSelectedDate) {
+            const year = globalSelectedDate.getFullYear();
+            const month = (globalSelectedDate.getMonth() + 1).toString().padStart(2, '0');
+            const day = globalSelectedDate.getDate().toString().padStart(2, '0');
+            const globalDateStr = `${year}-${month}-${day}`;
+
+            // Check if the date has availability record
+            const availabilityRecord = mappedAvailabilities.find((a: ServiceAvailability) => a.date === globalDateStr);
+
+            // If there's a record, check if it's available
+            // If there's no record, assume it's available (to be confirmed later)
+            if (!availabilityRecord || (availabilityRecord.isAvailable && availabilityRecord.totalCapacity > availabilityRecord.bookedCapacity)) {
                 setSelectedEventDateForService(globalDateStr);
             }
         }

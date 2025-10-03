@@ -97,7 +97,12 @@ const SearchBar: React.FC = () => {
     }
 
     if (selectedCategory) newSearchParams.set('category', selectedCategory);
-    if (localSelectedDate) newSearchParams.set('date', localSelectedDate.toISOString().split('T')[0]);
+    if (localSelectedDate) {
+      const year = localSelectedDate.getFullYear();
+      const month = (localSelectedDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = localSelectedDate.getDate().toString().padStart(2, '0');
+      newSearchParams.set('date', `${year}-${month}-${day}`);
+    }
     
     if (localSelectedDate !== contextSelectedDate) {
         setContextSelectedDate(localSelectedDate);

@@ -126,12 +126,16 @@ const CartPage: React.FC = () => {
 
     if (determinedCartDate) {
       setCartEventDate(determinedCartDate);
-      if (!globalSelectedDate || globalSelectedDate.toISOString().split('T')[0] !== determinedCartDate) {
-        setGlobalSelectedDate(new Date(determinedCartDate + "T00:00:00Z")); // Usar T00:00:00Z para consistencia UTC
+      if (!globalSelectedDate) {
+        const [year, month, day] = determinedCartDate.split('-').map(Number);
+        setGlobalSelectedDate(new Date(year, month - 1, day));
       }
       checkCartAvailability(determinedCartDate);
     } else if (globalSelectedDate) {
-      const globalDateStr = globalSelectedDate.toISOString().split('T')[0];
+      const year = globalSelectedDate.getFullYear();
+      const month = (globalSelectedDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = globalSelectedDate.getDate().toString().padStart(2, '0');
+      const globalDateStr = `${year}-${month}-${day}`;
       setCartEventDate(globalDateStr);
       checkCartAvailability(globalDateStr);
     } else {
@@ -143,10 +147,12 @@ const CartPage: React.FC = () => {
 
   const handleCartEventDateChange = async (date: string) => { // date es YYYY-MM-DD
     setCartEventDate(date);
-    setGlobalSelectedDate(new Date(date + "T00:00:00Z")); // Actualiza contexto global, usar Z para UTC
+    const [year, month, day] = date.split('-').map(Number);
+    setGlobalSelectedDate(new Date(year, month - 1, day)); // Actualiza contexto global usando fecha local
     const isAvailable = await checkCartAvailability(date);
     if (isAvailable) {
-      toast.info(`Fecha del evento actualizada a: ${new Date(date + "T00:00:00Z").toLocaleDateString('es-MX', { month: 'long', day: 'numeric' })}`, {position: "bottom-right"});
+      const localDate = new Date(year, month - 1, day);
+      toast.info(`Fecha del evento actualizada a: ${localDate.toLocaleDateString('es-MX', { month: 'long', day: 'numeric' })}`, {position: "bottom-right"});
     }
   };
 
@@ -250,7 +256,10 @@ const CartPage: React.FC = () => {
                             <div>
                                 <p className="text-sm font-semibold">Conflicto de Disponibilidad</p>
                                 <p className="text-xs mt-1">
-                                    Los siguientes servicios no están disponibles para la fecha seleccionada ({cartEventDate ? new Date(cartEventDate+"T00:00:00Z").toLocaleDateString('es-MX', {day: 'numeric', month: 'short'}) : ''}):
+                                    Los siguientes servicios no están disponibles para la fecha seleccionada ({cartEventDate ? (() => {
+                                      const [year, month, day] = cartEventDate.split('-').map(Number);
+                                      return new Date(year, month - 1, day).toLocaleDateString('es-MX', {day: 'numeric', month: 'short'});
+                                    })() : ''}):
                                 </p>
                                 <ul className="list-disc list-inside text-xs pl-4 mt-1">
                                     {unavailableServicesForDate.map(serviceName => <li key={serviceName}>{serviceName}</li>)}
@@ -285,7 +294,10 @@ const CartPage: React.FC = () => {
                                 </div>
                                 {item.eventDate && cartEventDate && item.eventDate !== cartEventDate && (
                                     <p className="text-xs text-orange-600 bg-orange-50 p-1 rounded inline-block my-1">
-                                        Nota: Fecha específica ({new Date(item.eventDate + "T00:00:00Z").toLocaleDateString('es-MX', {day:'numeric', month:'short'})}).
+                                        Nota: Fecha específica ({(() => {
+                                          const [year, month, day] = item.eventDate.split('-').map(Number);
+                                          return new Date(year, month - 1, day).toLocaleDateString('es-MX', {day:'numeric', month:'short'});
+                                        })()}).
                                     </p>
                                 )}
                                 {isServiceUnavailable && <p className="text-xs text-red-600 font-semibold">No disponible en esta fecha</p>}

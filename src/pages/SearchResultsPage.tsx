@@ -116,7 +116,8 @@ const fetchSearchResults = async () => {
           .from('services')
           .select(`
             *,
-            service_images (storage_path, is_main_image)
+            service_images (storage_path, is_main_image),
+            service_coverage_areas (area_name, city, state)
           `)
           .eq('is_approved', true);
 
@@ -141,7 +142,7 @@ const fetchSearchResults = async () => {
         
         console.log("Datos de servicios:", servicesData);
 
-        const processedServices = servicesData?.map((service: any) => {
+        let processedServices = servicesData?.map((service: any) => {
           console.log("Procesando servicio:", service); 
 
           let imageUrl = 'https://placehold.co/300x200?text=Sin+Imagen'; 
@@ -200,6 +201,26 @@ const fetchSearchResults = async () => {
             is_approved: service.is_approved,
           } as AppServiceType;
         }) || [];
+
+        // Filter by location if provided
+        if (locationTextParam && processedServices.length > 0) {
+          const locationLower = locationTextParam.toLowerCase();
+          processedServices = processedServices.filter((service: AppServiceType) => {
+            // Check specific_address
+            if (service.specific_address && service.specific_address.toLowerCase().includes(locationLower)) {
+              return true;
+            }
+            // Check coverage areas
+            if (service.coverage_areas && service.coverage_areas.length > 0) {
+              return service.coverage_areas.some((area: any) =>
+                (area.area_name && area.area_name.toLowerCase().includes(locationLower)) ||
+                (area.city && area.city.toLowerCase().includes(locationLower)) ||
+                (area.state && area.state.toLowerCase().includes(locationLower))
+              );
+            }
+            return false;
+          });
+        }
 
         setOriginalServices(processedServices);
 

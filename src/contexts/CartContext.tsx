@@ -65,11 +65,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       let newItems;
       // Usar la fecha proporcionada, o la global del contexto, o dejarla undefined si ninguna está disponible.
-      // Convertir Date a string YYYY-MM-DD si es necesario.
+      // Convertir Date a string YYYY-MM-DD si es necesario (usando fecha local, NO UTC)
       let dateForService: string | undefined = eventDate;
       if (!dateForService && globalSelectedDate) {
         try {
-            dateForService = globalSelectedDate.toISOString().split('T')[0];
+            const year = globalSelectedDate.getFullYear();
+            const month = (globalSelectedDate.getMonth() + 1).toString().padStart(2, '0');
+            const day = globalSelectedDate.getDate().toString().padStart(2, '0');
+            dateForService = `${year}-${month}-${day}`;
         } catch (e) { console.error("Error formatting globalSelectedDate", e)}
       }
 
@@ -139,7 +142,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Si hay fechas mixtas o algunas indefinidas, podría devolver la global o null
     if (globalSelectedDate) {
         try {
-            return globalSelectedDate.toISOString().split('T')[0];
+            const year = globalSelectedDate.getFullYear();
+            const month = (globalSelectedDate.getMonth() + 1).toString().padStart(2, '0');
+            const day = globalSelectedDate.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
         } catch (e) { return null; }
     }
     return null; // O manejar de otra forma (ej. forzar selección)
