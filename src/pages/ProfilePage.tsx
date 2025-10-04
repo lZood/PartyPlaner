@@ -1201,7 +1201,25 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
                             <div className="pt-1"><label htmlFor="default_is_available" className="flex items-center text-xs cursor-pointer"><input type="checkbox" name="default_is_available" id="default_is_available" checked={serviceFormData.default_is_available} onChange={handleServiceInputChange} className="h-3.5 w-3.5 mr-1.5"/>Disponible</label></div>
                         </div>
                     </div>
-                    <div> <label className="block text-xs font-medium">Imagen Principal*</label><div className={`relative border-2 border-dashed rounded-lg p-3 ${mainImage ? 'border-green-500' : 'border-gray-300'}`}><input type="file" accept="image/*" onChange={(e) => handleImageSelect(e, true)} className=\"absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>{mainImage ? (<div className=\"relative group"><img src={mainImage.preview} alt=\"Preview" className="w-full h-32 object-cover rounded-md"/><button type="button" onClick={() => removeImage(0, true)} className="absolute top-1 right-1"><Trash2 size={14}/></button></div>) : (<div className="text-center py-8"><Upload className="mx-auto h-8 w-8" /><p className="mt-1 text-xs">Clic o arrastra (Max 5MB)</p></div>)}</div></div>
+                    <div>
+                      <label className="block text-xs font-medium">Imagen Principal*</label>
+                      <div className={`relative border-2 border-dashed rounded-lg p-3 ${mainImage ? 'border-green-500' : 'border-gray-300'}`}>
+                        <input type="file" accept="image/*" onChange={(e) => handleImageSelect(e, true)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+                        {mainImage ? (
+                          <div className="relative group">
+                            <img src={mainImage.preview} alt="Preview" className="w-full h-32 object-cover rounded-md"/>
+                            <button type="button" onClick={() => removeImage(0, true)} className="absolute top-1 right-1">
+                              <Trash2 size={14}/>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-center py-8">
+                            <Upload className="mx-auto h-8 w-8" />
+                            <p className="mt-1 text-xs">Clic o arrastra (Max 5MB)</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Galería de Imágenes (hasta 5 adicionales)</label>
                       <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
