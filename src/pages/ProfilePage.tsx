@@ -1118,7 +1118,7 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
             {isLoadingFavorites ? (
               <div className="flex justify-center items-center py-10"> <Loader2 className="h-8 w-8 animate-spin text-primary-500" /> <p className="ml-3 text-gray-600">Cargando favoritos...</p> </div>
             ) : myFavoriteServices.length === 0 ? (
-              <div className="text-center py-10"> <Heart size={48} className="mx-auto text-gray-400 mb-4" /> <p className="text-gray-600 text-lg">No tienes servicios favoritos.</p> <Link to="/" className=\"mt-6 btn btn-primary">Explorar</Link> </div>
+<div className="text-center py-10"> <Heart size={48} className="mx-auto text-gray-400 mb-4" /> <p className="text-gray-600 text-lg">No tienes servicios favoritos.</p> <Link to="/" className="mt-6 btn btn-primary">Explorar</Link> </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {myFavoriteServices.map((service) => ( <ServiceCard key={service.favorite_id || service.id} service={service} /> ))}
