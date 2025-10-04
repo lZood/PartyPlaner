@@ -1077,7 +1077,7 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
             {isLoadingPurchases ? (
               <div className="flex justify-center items-center py-10"> <Loader2 className="h-8 w-8 animate-spin text-primary-500" /> <p className="ml-3 text-gray-600">Cargando...</p> </div>
             ) : myPurchases.length === 0 ? (
-              <div className="text-center py-10"> <ShoppingCart size={48} className="mx-auto text-gray-400 mb-4" /> <p className="text-gray-600 text-lg">No has realizado compras.</p> <Link to="/" className=\"mt-6 btn btn-primary">Explorar</Link> </div>
+<div className="text-center py-10"> <ShoppingCart size={48} className="mx-auto text-gray-400 mb-4" /> <p className="text-gray-600 text-lg">No has realizado compras.</p> <Link to="/" className="mt-6 btn btn-primary">Explorar</Link> </div>
             ) : (
               <div className="space-y-6">
                 {myPurchases.map((purchase) => (
