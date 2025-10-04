@@ -1,18 +1,7 @@
 // src/pages/ProfilePage.tsx
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import {
-  User, Mail, Phone, Plus, Package, Star, Upload, Image as ImageIcon,
-  Loader2, MapPin, Compass, Milestone, SearchCheck, CalendarDays,
-  ShoppingCart, X, Trash2, Edit,
-  Edit3,
-  Calendar as CalendarIconLucide,
-  ChevronDown,
-  ChevronUp,
-  AlertTriangle,
-  Heart, 
-  ListChecks
-} from 'lucide-react';
+import { User, Mail, Phone, Plus, Package, Star, Upload, Image as ImageIcon, Loader2, MapPin, Compass, Milestone, SearchCheck, CalendarDays, ShoppingCart, X, Trash2, CreditCard as Edit, CreditCard as Edit3, Calendar as CalendarIconLucide, ChevronDown, ChevronUp, AlertTriangle, Heart, ListChecks } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { categories } from '../data/categories';
 import { AppUser, Reservation, Service as AppServiceType, ServiceCoverageArea } from '../types';
@@ -797,14 +786,41 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
         }
 
 
-        // G. Upsert de imágenes a la base de datos
+        // G. Insertar/actualizar imágenes a la base de datos
         if (imagesForDbUpsert.length > 0) {
-            const { error: siError } = await supabase
-                .from('service_images')
-                .upsert(imagesForDbUpsert, { onConflict: 'id' }); 
-            if (siError) {
-                console.error('Supabase service_images upsert error:', siError);
-                throw siError; 
+            // Separar imágenes con ID (actualizar) de las nuevas (insertar)
+            const imagesToUpdate = imagesForDbUpsert.filter(img => img.id);
+            const imagesToInsert = imagesForDbUpsert.filter(img => !img.id);
+
+            // Actualizar imágenes existentes
+            if (imagesToUpdate.length > 0) {
+                for (const img of imagesToUpdate) {
+                    const { error: updateError } = await supabase
+                        .from('service_images')
+                        .update({
+                            storage_path: img.storage_path,
+                            is_main_image: img.is_main_image,
+                            position: img.position,
+                        })
+                        .eq('id', img.id!);
+
+                    if (updateError) {
+                        console.error('Error updating service_image:', updateError);
+                        throw updateError;
+                    }
+                }
+            }
+
+            // Insertar nuevas imágenes
+            if (imagesToInsert.length > 0) {
+                const { error: insertError } = await supabase
+                    .from('service_images')
+                    .insert(imagesToInsert);
+
+                if (insertError) {
+                    console.error('Error inserting service_images:', insertError);
+                    throw insertError;
+                }
             }
         } else if (finalServiceId) { // Si no hay imágenes para upsert (ej. todas eliminadas)
             await supabase.from('service_images').delete().eq('service_id', finalServiceId);
@@ -1061,7 +1077,7 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
             {isLoadingPurchases ? (
               <div className="flex justify-center items-center py-10"> <Loader2 className="h-8 w-8 animate-spin text-primary-500" /> <p className="ml-3 text-gray-600">Cargando...</p> </div>
             ) : myPurchases.length === 0 ? (
-              <div className="text-center py-10"> <ShoppingCart size={48} className="mx-auto text-gray-400 mb-4" /> <p className="text-gray-600 text-lg">No has realizado compras.</p> <Link to="/" className="mt-6 btn btn-primary">Explorar</Link> </div>
+              <div className="text-center py-10"> <ShoppingCart size={48} className="mx-auto text-gray-400 mb-4" /> <p className="text-gray-600 text-lg">No has realizado compras.</p> <Link to="/" className=\"mt-6 btn btn-primary">Explorar</Link> </div>
             ) : (
               <div className="space-y-6">
                 {myPurchases.map((purchase) => (
@@ -1102,7 +1118,7 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
             {isLoadingFavorites ? (
               <div className="flex justify-center items-center py-10"> <Loader2 className="h-8 w-8 animate-spin text-primary-500" /> <p className="ml-3 text-gray-600">Cargando favoritos...</p> </div>
             ) : myFavoriteServices.length === 0 ? (
-              <div className="text-center py-10"> <Heart size={48} className="mx-auto text-gray-400 mb-4" /> <p className="text-gray-600 text-lg">No tienes servicios favoritos.</p> <Link to="/" className="mt-6 btn btn-primary">Explorar</Link> </div>
+              <div className="text-center py-10"> <Heart size={48} className="mx-auto text-gray-400 mb-4" /> <p className="text-gray-600 text-lg">No tienes servicios favoritos.</p> <Link to="/" className=\"mt-6 btn btn-primary">Explorar</Link> </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {myFavoriteServices.map((service) => ( <ServiceCard key={service.favorite_id || service.id} service={service} /> ))}
@@ -1185,7 +1201,7 @@ const handleServiceSubmit = async (e: React.FormEvent) => {
                             <div className="pt-1"><label htmlFor="default_is_available" className="flex items-center text-xs cursor-pointer"><input type="checkbox" name="default_is_available" id="default_is_available" checked={serviceFormData.default_is_available} onChange={handleServiceInputChange} className="h-3.5 w-3.5 mr-1.5"/>Disponible</label></div>
                         </div>
                     </div>
-                    <div> <label className="block text-xs font-medium">Imagen Principal*</label><div className={`relative border-2 border-dashed rounded-lg p-3 ${mainImage ? 'border-green-500' : 'border-gray-300'}`}><input type="file" accept="image/*" onChange={(e) => handleImageSelect(e, true)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>{mainImage ? (<div className="relative group"><img src={mainImage.preview} alt="Preview" className="w-full h-32 object-cover rounded-md"/><button type="button" onClick={() => removeImage(0, true)} className="absolute top-1 right-1"><Trash2 size={14}/></button></div>) : (<div className="text-center py-8"><Upload className="mx-auto h-8 w-8" /><p className="mt-1 text-xs">Clic o arrastra (Max 5MB)</p></div>)}</div></div>
+                    <div> <label className="block text-xs font-medium">Imagen Principal*</label><div className={`relative border-2 border-dashed rounded-lg p-3 ${mainImage ? 'border-green-500' : 'border-gray-300'}`}><input type="file" accept="image/*" onChange={(e) => handleImageSelect(e, true)} className=\"absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>{mainImage ? (<div className=\"relative group"><img src={mainImage.preview} alt=\"Preview" className="w-full h-32 object-cover rounded-md"/><button type="button" onClick={() => removeImage(0, true)} className="absolute top-1 right-1"><Trash2 size={14}/></button></div>) : (<div className="text-center py-8"><Upload className="mx-auto h-8 w-8" /><p className="mt-1 text-xs">Clic o arrastra (Max 5MB)</p></div>)}</div></div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Galería de Imágenes (hasta 5 adicionales)</label>
                       <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">

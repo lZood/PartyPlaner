@@ -457,9 +457,27 @@ const ServiceDetailPage: React.FC = () => {
              <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               {service.gallery && service.gallery.length > 0 ? (
                 <Slider {...sliderSettings}>
-                  {service.gallery.map((image, index) => ( <div key={index} className="h-72 sm:h-96"><img src={image} alt={`${service.name} - Imagen ${index + 1}`} className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).src = 'https://placehold.co/800x600?text=Error+Imagen')}/></div> ))}
+                  {service.gallery.map((image, index) => (
+                    <div key={index} className="h-72 sm:h-96 md:h-[500px] bg-gray-100 flex items-center justify-center">
+                      <img
+                        src={image}
+                        alt={`${service.name} - Imagen ${index + 1}`}
+                        className="max-w-full max-h-full w-auto h-auto object-contain"
+                        onError={(e) => ((e.target as HTMLImageElement).src = 'https://placehold.co/800x600?text=Error+Imagen')}
+                      />
+                    </div>
+                  ))}
                 </Slider>
-              ) : ( <div className="h-72 sm:h-96 flex items-center justify-center bg-gray-100"><img src={service.imageUrl} alt={service.name} className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).src = 'https://placehold.co/800x600?text=Sin+Imagen')}/></div> )}
+              ) : (
+                <div className="h-72 sm:h-96 md:h-[500px] flex items-center justify-center bg-gray-100">
+                  <img
+                    src={service.imageUrl}
+                    alt={service.name}
+                    className="max-w-full max-h-full w-auto h-auto object-contain"
+                    onError={(e) => ((e.target as HTMLImageElement).src = 'https://placehold.co/800x600?text=Sin+Imagen')}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
