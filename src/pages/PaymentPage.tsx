@@ -88,8 +88,8 @@ const PaymentPage: React.FC = () => {
 
   const itemsToReserve = cart.items;
   const subtotal = itemsToReserve.reduce((sum, item) => sum + (item.service.price || 0) * item.quantity, 0);
-  const iva = subtotal * 0.16;
-  const totalAmount = subtotal + iva;
+  const serviceCharge = subtotal * 0.05;
+  const totalAmount = subtotal + serviceCharge;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,13 +322,14 @@ const PaymentPage: React.FC = () => {
                   <span>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-sm text-gray-600">
-                  <span>IVA (16%)</span>
-                  <span>${iva.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span>Cargo por servicios (5%)</span>
+                  <span>${serviceCharge.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold pt-2 border-t mt-2">
                   <span>Total a Pagar</span>
                   <span>${totalAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</span>
                 </div>
+                <p className="text-xs text-gray-500 text-center pt-2">El precio ya incluye IVA.</p>
               </div>
                <p className="text-xs text-gray-500 mt-4">
                 Al confirmar, aceptas nuestros <Link to="/terms" className="underline hover:text-primary-500">Términos y Condiciones</Link>.

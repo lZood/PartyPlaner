@@ -166,8 +166,8 @@ const CartPage: React.FC = () => {
   };
 
   const subtotal = calculateSubtotal();
-  const iva = subtotal * 0.16;
-  const grandTotal = subtotal + iva;
+  const serviceCharge = subtotal * 0.05;
+  const grandTotal = subtotal + serviceCharge;
   
   const handleProceedToPayment = () => {
     if (!isAuthenticated) {
@@ -351,8 +351,9 @@ const CartPage: React.FC = () => {
                 )}
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-gray-600"><span>Subtotal:</span> <span className="font-medium">${subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
-                  <div className="flex justify-between text-gray-600"><span>IVA (16%):</span> <span className="font-medium">${iva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
+                  <div className="flex justify-between text-gray-600"><span>Cargo por servicios (5%):</span> <span className="font-medium">${serviceCharge.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
                   <div className="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t border-gray-200 mt-2"><span>Total:</span> <span>${grandTotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})} MXN</span></div>
+                  <p className="text-xs text-gray-500 text-center pt-2">El precio ya incluye IVA.</p>
                 </div>
                 <button
                   onClick={handleProceedToPayment}
