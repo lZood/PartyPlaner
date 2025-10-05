@@ -88,7 +88,7 @@ const PaymentPage: React.FC = () => {
 
   const itemsToReserve = cart.items;
   const subtotal = itemsToReserve.reduce((sum, item) => sum + (item.service.price || 0) * item.quantity, 0);
-  const serviceCharge = subtotal * 0.05;
+  const serviceCharge = subtotal * 0.02;
   const totalAmount = subtotal + serviceCharge;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -322,7 +322,7 @@ const PaymentPage: React.FC = () => {
                   <span>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-sm text-gray-600">
-                  <span>Cargo por servicios (5%)</span>
+                  <span>Cargo por servicios (2%)</span>
                   <span>${serviceCharge.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold pt-2 border-t mt-2">
