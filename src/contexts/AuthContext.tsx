@@ -98,11 +98,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .from('users')
             .select('*')
             .eq('id', authUser.id)
-            .single();
+            .maybeSingle();
 
           if (!isMounted) return;
 
-          if (profileError && profileError.code !== 'PGRST116') { // PGRST116: no rows found
+          if (profileError) {
             console.error(`[AuthContext] processUserSession (${source}): Error fetching profile:`, profileError);
           }
           const newAppUserData: AppUser = {
@@ -190,26 +190,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            name: name,
+          },
+        },
       });
       if (authError) {
         toast.error(authError.message.includes('already registered') ? 'Este correo ya está registrado' : authError.message);
         throw authError;
       }
 
-      if (authData.user && authData.user.email) {
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert([{ id: authData.user.id, email: authData.user.email, name: name }]);
-        if (profileError) {
-          toast.error('Error al crear el perfil de usuario.');
-          throw profileError;
-        }
-        toast.success(`¡Bienvenido ${name}! Tu cuenta ha sido creada. Revisa tu correo para confirmar.`);
+      if (authData.user) {
+        // El perfil de usuario se crea automáticamente mediante el trigger en la base de datos
+        toast.success(`¡Bienvenido ${name}! Tu cuenta ha sido creada exitosamente.`);
       } else {
         toast.error('No se pudo completar el registro.');
       }
     } catch (error) {
-      if (!String(error).includes('AuthApiError') && !String(error).includes('PostgrestError')) {
+      if (!String(error).includes('AuthApiError')) {
          toast.error('Error durante el registro.');
       }
       throw error;
